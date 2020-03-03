@@ -1,0 +1,20 @@
+/*
+ * ufat-dummy.h
+ *
+ *  Created on: 29 sept. 2019
+ *      Author: droggen
+ */
+
+#ifndef UFAT_DUMMY_H_
+#define UFAT_DUMMY_H_
+
+#include <stdio.h>
+
+__weak unsigned char ufat_available(void);
+__weak FILE *ufat_log_open(unsigned char n);
+__weak unsigned char ufat_log_close(void);
+
+__weak unsigned ufat_log_getmaxsize(void);
+__weak unsigned ufat_log_getsize(void);
+
+#endif /* UFAT_DUMMY_H_ */

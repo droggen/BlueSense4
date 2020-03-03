@@ -1,0 +1,656 @@
+/*
+ * stmi2c-isr.c
+
+ *
+ *  Created on: 30 sept. 2019
+ *      Author: droggen
+ */
+#include <stdio.h>
+#include <string.h>
+#include "usrmain.h"
+#include "global.h"
+#include "i2c.h"
+#include "stmi2c-isr.h"
+
+#include "system.h"
+
+// Debug options: #define I2CDBG_SM
+// Debug options: #define I2CDBG_SM_ERR
+//#define I2CDBG_SM 1
+#define I2CDBG_SM_ERR
+
+// Caching of current transaction parameters
+volatile unsigned char _i2c_transaction_idle=1;																	// Indicates whether a transaction is in progress or idle. Modified by interrupt; read in queue to detect end of transaction
+I2C_TRANSACTION *_i2c_current_transaction;																	// Current transaction for the interrupt routine.
+unsigned char _i2c_current_transaction_n;																		// Modified by interrupt, but only used in interrupt
+unsigned char _i2c_current_transaction_state;																	// Modified by interrupt, but only used in interrupt
+unsigned char _i2c_current_transaction_dodata;																	// Modified by interrupt, but only used in interrupt
+unsigned char _i2c_current_transaction_address;																	// Modified by interrupt, but only used in interrupt
+unsigned char _i2c_current_transaction_rw;																		// Modified by interrupt, but only used in interrupt
+unsigned char _i2c_current_transaction_dostop;																	// Modified by interrupt, but only used in interrupt
+I2C_CALLBACK  _i2c_current_transaction_callback;																// Modified by interrupt, but only used in interrupt
+volatile unsigned char *_i2c_current_transaction_status,*_i2c_current_transaction_i2cerror;
+unsigned char *_i2c_current_transaction_data;
+
+
+volatile unsigned char status;											// Status:	Lower 4 bit indicate status.
+volatile unsigned char i2cerror;										// Indicate the AVR I2C error code, when status is non-null
+
+
+volatile unsigned long int i2c_intctr=0;
+
+
+
+void I2C1_EV_IRQHandler()
+{
+	//itmprintf("Iint\n");
+	//fprintf(file_pri,"Iint\n");
+
+	//I2C_statemachine_internal();
+	I2C_statemachine_outer();
+}
+void I2C1_ER_IRQHandler()
+{
+#ifdef I2CDBG_SM_ERR
+	//itmprintf("Ierr\n");
+	fprintf(file_pri,"Ierr %04X %04X\n",(unsigned)I2C1->SR1,(unsigned)I2C1->SR2);
+#endif
+
+	//I2C_statemachine_internal();
+	I2C_statemachine_outer();
+}
+
+
+
+/******************************************************************************
+	I2C_statemachine_outer
+*******************************************************************************
+	Outer state machine loading transactions to be executed by I2C_statemachine_internal
+******************************************************************************/
+void I2C_statemachine_outer()
+{
+	I2C_statemachine_outer_start:
+
+	//#if I2CDBG
+		//fprintf(file_pri,"i %d %d\n",_i2c_current_transaction,_i2c_transaction_idle);
+	//#endif
+	if(_i2c_transaction_idle==1)
+	{
+		// Idle: check if next transaction to queue
+		_i2c_current_transaction = _i2c_transaction_getnext();	// Current transaction
+		#if I2CDBG
+			//fprintf(file_pri,"D %08X\n",_i2c_current_transaction);
+		#endif
+		if(_i2c_current_transaction==0)
+		{
+			//fprintf(file_pri,"D return\n");
+			return;																			// No next transaction
+		}
+		// Initialize internal stuff
+		_i2c_current_transaction_n = 0;														// Number of data bytes transferred so far
+		_i2c_current_transaction_state = 0;													// State of the transaction
+		_i2c_transaction_idle=0;															// Non idle
+		// Cache transaction to speedup access
+		_i2c_current_transaction_dodata=_i2c_current_transaction->dodata;
+		_i2c_current_transaction_address=_i2c_current_transaction->address;
+		_i2c_current_transaction_rw=_i2c_current_transaction->rw;
+		_i2c_current_transaction_dostop=_i2c_current_transaction->dostop;
+		_i2c_current_transaction_callback=_i2c_current_transaction->callback;
+		_i2c_current_transaction_status=&_i2c_current_transaction->status;
+		_i2c_current_transaction_i2cerror=&_i2c_current_transaction->i2cerror;
+		if(!_i2c_current_transaction->extdata)
+			_i2c_current_transaction_data=_i2c_current_transaction->data;
+		else
+			_i2c_current_transaction_data=_i2c_current_transaction->extdata;
+	}
+
+	//fprintf(file_pri,"calling sm\n");
+	I2C_statemachine_internal();
+
+	//fprintf(file_pri,"aft int sm: i: %d\n",_i2c_transaction_idle);
+
+	if(_i2c_transaction_idle==1)
+		goto I2C_statemachine_outer_start;
+}
+
+/******************************************************************************
+	I2C_statemachine_internal
+*******************************************************************************
+	Internal state machine executing the innards of one transaction including start, address, data, stop.
+******************************************************************************/
+void _I2C_statemachine_handleerror(unsigned char error, unsigned sr1)
+{
+	// Error
+	_i2c_transaction_idle=1;								// Return to idle
+	*_i2c_current_transaction_status = error;				// Indicate failure in start condition
+	*_i2c_current_transaction_i2cerror = sr1;				// Indicate I2C failure code
+
+	// Generate stop
+	I2C1->CR1|=(1<<9);
+
+	// Remove the ack error (must check if still relevant)
+	I2C1->SR1=0b1111101111111111;				// This is if no response to an address
+
+	I2C1->CR2=I2C1->CR2&0b1111100011111111;		// No interrupts
+
+	// Callback if any
+	if(_i2c_current_transaction_callback)
+		_i2c_current_transaction_callback(_i2c_current_transaction);
+	 // Remove next linked transactions
+	_i2c_transaction_removelinked(_i2c_current_transaction);
+}
+void I2C_statemachine_internal()
+{
+	if(_i2c_current_transaction_rw==I2C_WRITE)
+		I2C_statemachine_internal_tx();
+	else
+		I2C_statemachine_internal_rx();
+}
+void I2C_statemachine_internal_tx()
+{
+	// This is a working state machine for transfer
+	unsigned int sr1,sr1b,sr2;
+
+
+	sr1 = I2C1->SR1;		// This is always needed
+
+	//fprintf(file_pri,"SM2 s=%d SR1=%04X\n",_i2c_current_transaction_state,sr1);
+
+	if(_i2c_transaction_idle)
+	{
+		// If we are idle we should not be called - flag this as error
+#ifdef I2CDBG_SM_ERR
+		fprintf(file_pri,"I2C ISR TX Error idle\n");
+#endif
+		I2C1->CR2=I2C1->CR2&0b1111100011111111;		// No interrupts
+		return;
+	}
+
+	// Process the state machine.
+	switch(_i2c_current_transaction_state)
+	{
+		// ------------------------------------------------------
+		// State 0:	Always called when executing the transaction.
+		// 			Setup interrupt and TWI enable
+		// 			Generate the start condition if needed. Otherwise, go to next state.
+		// ------------------------------------------------------
+		case 0:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X0TX %04X\r",sr1);
+			#endif
+
+			_i2c_transaction_idle = 0;											// Mark as non-idle
+			_i2c_current_transaction_state=1;									// Set next state
+
+			// Enable interrupts - two options are possible and the code will work in both case in TX mode
+			// 1. 	Enable all interrupts (buffer and event): interrupt on TxE and BTF. Guarantees that the shift register always has data and maximises I2C speed.
+			// 		In this mode, there is at least one interrupt for each byte transferred
+			// 2.	Enable only event interrupt: interrupt on BTF. Interrupt triggered when the shift register has no data (i.e. pauses until the ISR is called).
+			//		In this mode, whenever the ISR is called two bytes are written: one goes straight to the shift register, the other one to DR.
+			//		This mode generates one interrupt every two bytes transferred.
+			I2C1->CR2|=(1<<10)|(1<<9)|(1<<8);			// More interrupts, faster I2C
+			//I2C1->CR2|=(1<<9)|(1<<8);					// Less interrupts, slower I2C
+
+			// Generate the start condition.
+			I2C1->CR1|=(1<<8);
+
+			// Return - ISR will be called back upon start completed.
+			return;
+
+		// ------------------------------------------------------
+		// State 1:	Send address (EV5)
+		//				Process the return value of the start condition  and send the address
+		// SB is cleared by reading SR1 (done at the entry of this function) and writing the address
+		// ------------------------------------------------------
+		case 1:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X1TX %04X\r",sr1);
+			#endif
+
+			if(!(sr1&0x01))
+			{
+#ifdef I2CDBG_SM_ERR
+				fprintf(file_pri,"X1e tx: %04X\n",sr1);
+#endif
+				// Error
+				_I2C_statemachine_handleerror(1,sr1);	// Indicate failure in start condition
+
+				return;
+			}
+
+			// Here only if start is OK
+			I2C1->DR = (_i2c_current_transaction_address<<1)+_i2c_current_transaction_rw;	// I2C 7-bit address + r/w#
+
+			#if I2CDBG_SM==1
+			//fprintf(file_pri,"DA\r");
+			#endif
+
+			_i2c_current_transaction_state=12;							// Set next state for write
+
+			return;		// ISR will be called again when ADDR is set
+
+		// ------------------------------------------------------
+		// State 12: 	Master+Write Address Return State (EV6)
+		//				Process the return value of the address condition (if executed).
+		//	SR1 must have ADDR bit set if successful.
+		//	ADDR bit is cleared by reading SR1 (done in entry of this function) followed by reading SR2 (here).
+		// ------------------------------------------------------
+		case 12:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X12TX (AdrRet) %04X\r",sr1);
+			#endif
+
+			if( !(sr1&0x02) )			// Status isn't ADDR -> Error
+			{
+#ifdef I2CDBG_SM_ERR
+				fprintf(file_pri,"X12e TX: %04X\n",sr1);
+#endif
+				// Error
+				_I2C_statemachine_handleerror(2,sr1);	// Indicate failure in address
+				return;
+			}
+
+			// Clear ADDR bit by reading SR2
+			sr2=I2C1->SR2;			// Clear ADDR bit
+			(void)sr2;
+
+			sr1b=I2C1->SR1;			// Read the new value of SR1 - it should show that ADDR is cleared
+			//fprintf(file_pri,"SR1 before: %04X after: %04X\n",sr1,sr1b);		// Optionally print
+			sr1 = sr1b;				// Copy the new sr1b to sr1 - this is simply for debugging purposes as X13 prints sr1 and this function flows to X13
+
+			_i2c_current_transaction_state=13;									// Set next state - state 13: data write
+
+
+			// Don't return, immediately send data by flowing to state 13
+
+		// ------------------------------------------------------
+		// State 13:	Master+Write Transmit data state. (EV8_1, EV8)
+		//				This state is entered multiple times when multiple bytes must be transferred.
+		//
+		// This state is entered when the TxE or BTF interrupt is generated (depending on whether the "more" or "less" interrupt is selected in case 0).
+		//
+		// Master state sequence:   0 -> 1 -> 12 -> 13 -> 13 -> 13 -> 14
+		//                        Strt  Ad   AdCk   TX    Tx    Tx   Stop
+		// ------------------------------------------------------
+		case 13:
+		case13:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X13 Tx SR1: %04X\r",sr1);
+			#endif
+
+
+			if(_i2c_current_transaction_n<_i2c_current_transaction_dodata)			// If data to transmit data
+			{
+
+				// Send data
+				I2C1->DR = _i2c_current_transaction_data[_i2c_current_transaction_n];
+				#if I2CDBG_SM==1
+				fprintf(file_pri,"Tx %d\r",_i2c_current_transaction_n);
+				#endif
+
+				_i2c_current_transaction_n++;										// Indicate one data more processed
+
+				// If the DR register is still empty (i.e. first byte, EV8_1) send immediately a second byte.
+				// (if there's no second byte the if above won't be met and it goes to end of transfer).
+				// Capture SR1 in sr1 as the goto will need this.
+				if((sr1=I2C1->SR1)&0x80)
+				{
+					goto case13;
+				}
+				//fprintf(file_pri,"No further xfer now. sr1 is %04X\r",sr1);
+
+				// We cannot try a new transfer so we flow out - which will test if we reached the last byte
+
+			}
+
+			if(_i2c_current_transaction_n==_i2c_current_transaction_dodata)		// If all bytes transferred
+			{
+				// If no data to transmit then TxE remains set. The shift register still outputs the last byte and then BTF is set.
+				// We want to send the stop bit when BTF is set hence change interrupts to only react on event and error (but not buffer)
+
+				//fprintf(file_pri,"done\n");
+
+				I2C1->CR2=I2C1->CR2&0b1111101111111111;		// Only event and error interrupts (BTF)
+
+				// Go to state 14 (wait for BTF)
+				_i2c_current_transaction_state=14;									// Set next state - state 13: check data transfer answer
+
+			}
+
+			// Wait for a new interrupt (TxE or BTF)
+
+			return;
+
+		// ------------------------------------------------------
+		// State 14:	Send stop (EV8_2)
+		//				Send the stop condition, and wait for it to complete by polling
+		// ------------------------------------------------------
+
+		case 14:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X14 TxCk SR1 %04X\r",sr1);
+			#endif
+
+			if(!(sr1&0x04))		// sr1 must have BTF, but this shouldn't happen as this case only comes interrupt
+			{
+#ifdef I2CDBG_SM_ERR
+				fprintf(file_pri,"X14e\n");
+#endif
+				// Error
+				_I2C_statemachine_handleerror(4,sr1);	// Indicate failure in stop
+
+				return;
+			}
+
+			// Send the stop
+			if(_i2c_current_transaction_dostop)		// Repeated start leads to issues -> disable
+			{
+				// generate stop
+				I2C1->CR1|=(1<<9);
+				int c=0;
+				// wait until clear
+				while(I2C1->CR1&0x200)
+					c++;
+				//fprintf(file_pri,"c %d\n",c);
+			}
+
+			// Transaction done here
+			_i2c_transaction_idle=1;															// Return to idle
+			*_i2c_current_transaction_status = 0;												// Indicate success
+			*_i2c_current_transaction_i2cerror = 0;												// Indicate success
+
+			I2C1->CR2=I2C1->CR2&0b1111100011111111;		// No interrupts
+
+			// Callback only if not linked to next
+			if(!_i2c_current_transaction->link2next)
+				if(_i2c_current_transaction_callback)
+					_i2c_current_transaction_callback(_i2c_current_transaction);
+
+			// Here must dealloc transaction
+			i2c_transaction_pool_free1(_i2c_current_transaction);
+
+
+
+			return;
+
+		default:
+			//#if I2CDBG_SM==1
+			fprintf(file_pri,"I2C ISR unknown state %d\n",_i2c_current_transaction_state);
+			//#endif
+	}
+}
+
+
+void I2C_statemachine_internal_rx()
+{
+	unsigned int sr1,sr1b=0x55,sr2;
+
+
+	sr1 = I2C1->SR1;		// This is always needed
+
+	//fprintf(file_pri,"SM2 s=%d SR1=%04X\n",_i2c_current_transaction_state,sr1);
+
+	if(_i2c_transaction_idle)
+	{
+		// If we are idle we should not be called - flag this as error
+#ifdef I2CDBG_SM_ERR
+		fprintf(file_pri,"I2C ISR RX Error idle\n");
+#endif
+		I2C1->CR2=I2C1->CR2&0b1111100011111111;		// No interrupts
+		return;
+	}
+
+	// Process the state machine.
+	switch(_i2c_current_transaction_state)
+	{
+		// ------------------------------------------------------
+		// State 0:	Always called when executing the transaction.
+		// 			Setup interrupt and TWI enable
+		// 			Generate the start condition if needed. Otherwise, go to next state.
+		// ------------------------------------------------------
+		case 0:
+		{
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X0RX %04X\r",sr1);
+			#endif
+
+			_i2c_transaction_idle = 0;											// Mark as non-idle
+			_i2c_current_transaction_state=1;									// Set next state
+
+			// Enable interrupts. Unlike TX mode, here all interrupts must be active
+			I2C1->CR2|=(1<<10)|(1<<9)|(1<<8);
+
+			// Generate the start condition.
+			I2C1->CR1|=(1<<8);
+
+			unsigned ssr1[20],ssr2[20],scr1[20];
+
+			// No read of cr1,sr1,sr2: doesn't work. 10 reads, ok. 1 read: ok.
+			// single read of CR1 or SR1 or SR2 is sufficient (400KHz) ???
+
+			// If there is a change from write to read - wait we change the role
+			int ctr=0,ctr2=0;
+			//while(I2C1->SR2&0x04)
+			//while(I2C1->SR1&0x80)			// does not work without print
+			//while(I2C1->SR1&0x04)			// does not work without print
+			while(I2C1->CR1&0x100)		// works with print; works without print			// <- this is necessary if restart condition
+				ctr++;
+			//while(!(I2C1->SR1&0x1))		// trial of SB (not needed)
+				//ctr2++;
+			//fprintf(file_pri,"c: %d\n",ctr);
+			//fprintf(file_pri,"c1: %d c2: %d\n",ctr,ctr2);
+			/*for(int i=0;i<20;i++)
+			{
+				scr1[i] = I2C1->CR1;
+				ssr1[i] = I2C1->SR1;
+				ssr2[i] = I2C1->SR2;
+			}
+			for(int i=0;i<20;i++)
+			{
+				fprintf(file_pri,"s %04X %04X %04X\n",scr1[i],ssr1[i],ssr2[i]);
+			}*/
+			//sr1 = I2C1->CR1;
+			//(void)sr1;
+
+
+
+			// Return - ISR will be called back upon start completed.
+			return;
+		}
+
+		// ------------------------------------------------------
+		// State 1:	Send address (EV5)
+		//				Process the return value of the start condition  and send the address
+		// SB is cleared by reading SR1 (done at the entry of this function) and writing the address
+		// ------------------------------------------------------
+		case 1:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X1RX %04X\r",sr1);
+			#endif
+
+			if(!(sr1&0x01))
+			{
+#ifdef I2CDBG_SM_ERR
+				fprintf(file_pri,"X1e rx %04X\r",sr1);
+#endif
+				// Error
+				_I2C_statemachine_handleerror(1,sr1);					// Indicate failure in start condition
+
+				return;
+			}
+
+			// Here only if start is OK
+			I2C1->DR = (_i2c_current_transaction_address<<1)+_i2c_current_transaction_rw;	// I2C 7-bit address + r/w#
+
+			#if I2CDBG_SM==1
+			//fprintf(file_pri,"DA\r");
+			#endif
+
+			_i2c_current_transaction_state=12;							// Set next state for read
+
+
+			return;		// ISR will be called again when ADDR is set
+
+		// ------------------------------------------------------
+		// State 12:	Master+Receive Address return state (EV6)
+		//	SR1 must have ADDR bit set if successful.
+		//	ADDR bit is cleared by reading SR1 (done in entry of this function) followed by reading SR2 (here).
+		// ------------------------------------------------------
+		case 12:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X12RX %04X\n",sr1);
+			#endif
+
+
+			if( !(sr1&0x02) )			// Status isn't ADDR -> Error
+			{
+#ifdef I2CDBG_SM_ERR
+				fprintf(file_pri,"X12e RX: %04X\n",sr1	);
+#endif
+				// Error
+				_I2C_statemachine_handleerror(2,sr1);					// Indicate failure in address
+
+				return;
+			}
+
+			// If receiving one byte NACK must be done in EV6 before clearing the ADDR flag
+			if(_i2c_current_transaction_dodata==1)
+			{
+				I2C1->CR1=I2C1->CR1&0b1111101111111111;										// Clear acknowledge bit
+				//fprintf(file_pri,"NACK\n");
+			}
+			else
+			{
+				I2C1->CR1=I2C1->CR1|(1<<10);												// Set acknowledge bit
+				//fprintf(file_pri,"ACK\n");
+			}
+
+
+			// Clear ADDR bit by reading SR2
+			sr2=I2C1->SR2;			// Clear ADDR bit
+			(void)sr2;
+
+			sr1b = I2C1->SR1;
+			//fprintf(file_pri,"sr1 bef %04X aft %04X\n",sr1,sr1b);
+
+			_i2c_current_transaction_state=13;									// Set next state - state 13: data read
+
+			return;
+
+		// ------------------------------------------------------
+		// State 13:	Master+Read Receive data state. (EV7, EV7_1)
+		//				This state is entered multiple times when multiple bytes must be transferred.
+		//
+		// This state is entered when the TxE or BTF interrupt is generated (depending on whether the "more" or "less" interrupt is selected in case 0).
+		//
+		// Master state sequence:   0 -> 1 -> 12 -> 13 -> 13 -> 13 -> 14
+		//                        Strt  Ad   AdCk   RX    Rx    Rx   Stop
+		// ------------------------------------------------------
+		case 13:
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X13RX %04X\r",sr1);
+			#endif
+
+
+			if(!(sr1&0x40))				// RxNE
+			{
+				// Error
+				_I2C_statemachine_handleerror(5,sr1);					// Indicate failure in read
+
+				return;
+			}
+
+			if(_i2c_current_transaction_n<_i2c_current_transaction_dodata)
+			{
+				_i2c_current_transaction_data[_i2c_current_transaction_n] = I2C1->DR;
+				//fprintf(file_pri,"Rcv %d: %02X\n",_i2c_current_transaction_n,_i2c_current_transaction_data[_i2c_current_transaction_n]);
+				//itmprintf("Rcv %d: %02X\n",_i2c_current_transaction_n,_i2c_current_transaction_data[_i2c_current_transaction_n]);
+				_i2c_current_transaction_n++;
+			}
+
+			if(_i2c_current_transaction_n==_i2c_current_transaction_dodata-1)		// One byte before the end
+			{
+				I2C1->CR1=I2C1->CR1&0b1111101111111111;								// Clear acknowledge bit
+				//fprintf(file_pri,"NACK\n");
+			}
+			// No need to set the acknowledge bit: remains from EV6)
+
+			sr1b = I2C1->SR1;
+			//fprintf(file_pri,"sr1 bef %04X aft %04X\n",sr1,sr1b);
+			sr1 = sr1b;
+
+			if(_i2c_current_transaction_n==_i2c_current_transaction_dodata)		// If all bytes transferred
+			{
+				// All read
+				//fprintf(file_pri,"All read\n");
+				_i2c_current_transaction_state=14;
+				goto case14;
+			}
+
+			//
+			return;
+
+		// ------------------------------------------------------
+		// State 35:	Master+Write/Read Send Stop
+		//				Transmit stop condition
+		// ------------------------------------------------------
+		case 14:
+		case14:
+		{
+			#if I2CDBG_SM==1
+			fprintf(file_pri,"X14 Stop: SR1=%04X\n",sr1);
+			#endif
+
+			if(_i2c_current_transaction_dostop)		// Repeated start leads to issues -> disable
+			{
+				// generate stop
+				I2C1->CR1|=(1<<9);
+				int c=0;
+				// wait until clear
+				while(I2C1->CR1&0x200)
+					c++;
+				//fprintf(file_pri,"c %d\n",c);
+			}
+
+			// Do not wait for any answer... we've completed successfully the task
+			_i2c_transaction_idle=1;															// Return to idle
+			*_i2c_current_transaction_status = 0;												// Indicate success
+			*_i2c_current_transaction_i2cerror = 0;												// Indicate success
+
+			I2C1->CR2=I2C1->CR2&0b1111100011111111;		// No interrupts
+
+			// Callback only if not linked to next
+			if(!_i2c_current_transaction->link2next)
+				if(_i2c_current_transaction_callback)
+					_i2c_current_transaction_callback(_i2c_current_transaction);
+
+			// Here must dealloc transacton
+			i2c_transaction_pool_free1(_i2c_current_transaction);
+
+			return;
+		}
+		default:
+			//#if I2CDBG_SM==1
+			fprintf(file_pri,"I2C ISR unknown state %d\n",_i2c_current_transaction_state);
+			//#endif
+
+	}
+
+}
+
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
