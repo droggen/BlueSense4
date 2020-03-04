@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2019 STMicroelectronics.
+  * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
   * All rights reserved.</center></h2>
   *
   * This software component is licensed by ST under Ultimate Liberty license
@@ -104,6 +104,7 @@ int main(void)
   MX_FATFS_Init();
 
   MX_DMA_Init();
+
   MX_DFSDM1_Init();
 
   MX_ADC1_Init();
