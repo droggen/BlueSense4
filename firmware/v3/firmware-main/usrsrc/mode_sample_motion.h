@@ -5,17 +5,32 @@
 #include "mpu.h"
 
 // MSM_LOGBAT: if defined, logs the battery level in the last log file, if the filesystem is available.
+
+#define _MODE_SAMPLE_MPU_GET_AND_SEND		{	\
+												unsigned char l = mpu_data_level();	\
+												for(unsigned char i=0;i<l;i++)	\
+												{	\
+													if(mpu_data_getnext(&mpumotiondata,&mpumotiongeometry))	\
+														break;	\
+													putbufrv = mode_sample_mpu_stream(file_stream);	\
+													if(putbufrv)	\
+														stat_mpu_samplesendfailed++;	\
+													else	\
+														stat_mpu_samplesendok++;	\
+												} 	\
+											}
+
+
 // #define MSM_LOGBAT
 
 extern const char help_streamlog[];
 
-unsigned char stream_sample(FILE *f);
+unsigned char mode_sample_mpu_stream(FILE *f);
 
 // Structure to hold the volatile parameters of this mode
 typedef struct {
 	unsigned char mode;
 	int logfile;
-	unsigned long duration;
 } MODE_SAMPLE_MOTION_PARAM;
 
 extern MPUMOTIONDATA mpumotiondata;

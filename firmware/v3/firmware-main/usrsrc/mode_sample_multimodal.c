@@ -64,6 +64,7 @@ unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size)
 {
 	mode_sample_param_duration = 0;
 	mode_sample_param_logfile = -1;
+	mode_adc_fastbin=0;
 
 	unsigned modemap[4] = {MULTIMODAL_MPU|MULTIMODAL_SND|MULTIMODAL_ADC,MULTIMODAL_MPU|MULTIMODAL_SND,MULTIMODAL_MPU|MULTIMODAL_ADC,MULTIMODAL_SND|MULTIMODAL_ADC};	// Bitmap indicating which modality to include: MPU | SND | ADC
 
@@ -80,7 +81,10 @@ unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size)
 	}
 
 	if(np>0 && np<3)
+	{
+		fprintf(file_pri,"Invalid number of parameters\n");
 		return 2;
+	}
 	switch(np)
 	{
 		case 3:
@@ -137,16 +141,8 @@ void mode_sample_multimodal(void)
 	STM_DFSMD_TYPE audbuf[STM_DFSMD_BUFFER_SIZE];	// Buffer for audio data
 	unsigned long audbufms,audbufpkt;				// Audio metadata
 
-	/*unsigned long stat_adc_totsample=0;
-	unsigned long stat_adc_samplesendfailed=0;
-	unsigned long stat_mpu_totsample=0;
-	unsigned long stat_mpu_samplesendfailed=0;
-	unsigned long stat_mpu_samplesendok=0;
-	unsigned long stat_snd_totsample=0;
-	unsigned long stat_snd_samplesendfailed=0;
-	unsigned long stat_snd_samplesendok=0;*/
-	unsigned long stat_timems_end=0;
-	unsigned char putbufrv;
+	//unsigned long stat_timems_end=0;
+	int putbufrv;
 
 	mode_sample_sound_param_framebased=1;			// Sound must be frame-based always
 
@@ -162,7 +158,7 @@ void mode_sample_multimodal(void)
 	// Init log file
 	mode_sample_file_log=0;										// Initialise log to null
 	if(mode_sample_startlog(mode_sample_param_logfile))			// Initialise log will be initiated if needed here
-		goto mode_sample_adc_end;
+		goto mode_sample_multimodal_end;
 
 	// Send data to primary stream or to log if available
 	FILE *file_stream;
@@ -225,27 +221,17 @@ void mode_sample_multimodal(void)
 		//}
 
 		stat_t_cur=timer_ms_get();						// Current time
-		if(mode_sample_param_duration)					// Check if maximum mode time is reached
-		{
-			if(stat_t_cur-stat_timems_start>=mode_sample_param_duration*1000)
-				break;
-		}
-		if(ltc2942_last_mV()<BATTERY_VERYVERYLOW)				// Stop if batter too low
-		{
-			fprintf(file_pri,"Low battery, interrupting\n");
-			break;
-		}
-		if(stat_t_cur-time_lastblink>1000)						// Blink
-		{
-			system_led_toggle(0b100);
-			time_lastblink=stat_t_cur;
-		}
+		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified
+		_MODE_SAMPLE_CHECK_BATTERY_BREAK;				// Stop if battery too low
+		_MODE_SAMPLE_BLINK;								// Blink
+
 		if(mode_stream_format_enableinfo)						// Display info if enabled
 		{
 			if(stat_t_cur-stat_time_laststatus>MODE_SAMPLE_INFOEVERY_MS)
 			{
-				stream_adc_status(file_pri,mode_stream_format_bin);
-				stream_sound_status(file_pri,mode_stream_format_bin);
+				stream_adc_status(file_pri,0);
+				stream_sound_status(file_pri,0);
+				stream_motion_status(file_pri,0);
 				stat_time_laststatus+=MODE_SAMPLE_INFOEVERY_MS;
 				stat_wakeup=0;
 			}
@@ -254,63 +240,26 @@ void mode_sample_multimodal(void)
 		// ADC data
 		if(mode_sample_multimodal_mode & MULTIMODAL_ADC)
 		{
-			// Check data
-			unsigned numchannels;
-			unsigned long pktsample,timesample;
-			if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
-			{
-				// Encode the samples
-				if(!mode_stream_format_bin)
-				{
-					// Plain text encoding
-					putbufrv = mode_sample_adc_streamtext(file_stream,pktsample,timesample,numchannels,data);
-				}
-				else
-				{
-					putbufrv = mode_sample_adc_streambin(file_stream,pktsample,timesample,numchannels,data);
-				}
-
-				// Attempt to send and update the statistics in case of success and error
-				if(putbufrv)
-					stat_adc_samplesendfailed++;	// There was an error in fputbuf: increment the number of samples failed to send.
-				else
-					stat_adc_samplesendok++;		// Increment success counter
-			}
+			// Stream existing data
+			_MODE_SAMPLE_ADC_GET_AND_SEND;
 		}	// ADC
 		// SND data
 		if(mode_sample_multimodal_mode & MULTIMODAL_SND)
 		{
-			if(!stm_dfsdm_data_getnext(audbuf,&audbufms,&audbufpkt))
-			{
-				// Send the samples and check for error
-				putbufrv = audio_stream_sample(audbuf,audbufms,audbufpkt,file_stream);
-
-				// Update the statistics in case of errors
-				if(putbufrv)
-					stat_snd_samplesendfailed+=putbufrv;		// There was an error in fputbuf: increment the number of samples failed to send.
-				else
-					stat_snd_samplesendok++;
-			}
+			// Stream existing data
+			_MODE_SAMPLE_SOUND_GET_AND_SEND;
 		} // SND
 		// MPU data
 		if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
 		{
-			// Get the data from the auto read buffer; if no data available break
-			if(!mpu_data_getnext(&mpumotiondata,&mpumotiongeometry))
-			{
-				// Send the samples and check for error
-				putbufrv = stream_sample(file_stream);
-
-				// Update the statistics in case of errors
-				if(putbufrv)
-					stat_mpu_samplesendfailed++;				// There was an error in fputbuf: increment the number of samples failed to send.
-				else
-					stat_mpu_samplesendok++;
-			}
+			// Stream existing data
+			_MODE_SAMPLE_MPU_GET_AND_SEND;
 		} // MPU
-	}	// Continuous loop
-	stat_timems_end = timer_ms_get();
 
+		// Sleep
+		_MODE_SAMPLE_SLEEP;
+	}	// Continuous loop
+	//stat_timems_end = timer_ms_get();
 
 	// Stop sampling
 	if(mode_sample_multimodal_mode & MULTIMODAL_ADC)
@@ -331,11 +280,7 @@ void mode_sample_multimodal(void)
 	stream_sound_status(file_pri,0);
 	stream_motion_status(file_pri,0);
 
-	unsigned long stat_adc_totsample = stm_dfsdm_stat_totframes();
-	unsigned long sps = stat_adc_totsample*1000/(stat_timems_end-stat_timems_start);
-	fprintf(file_pri,"%lu samples/sec\n",sps);
 
-
-	mode_sample_adc_end:
+mode_sample_multimodal_end:
 	fprintf(file_pri,"<SMPMULTIMODAL\n");
 }

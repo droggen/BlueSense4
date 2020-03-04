@@ -83,7 +83,7 @@ void mode_sample_motion_setparam(unsigned char mode, int logfile, int duration)
 {
 	mode_sample_motion_param.mode=mode;
 	mode_sample_motion_param.logfile=logfile;
-	mode_sample_motion_param.duration=duration*1000l;		// Store the duration in milliseconds
+	mode_sample_param_duration=duration;
 	
 	//printf("duration: %lu\n",mode_sample_motion_param.duration);
 	//printf("mode_sample_motion_setparam: %d %d %d\n",mode_sample_motion_param.mode,mode_sample_motion_param.logfile,mode_sample_motion_param.duration);
@@ -290,7 +290,7 @@ unsigned char stream_sample_bin(FILE *f)
 
 
 
-unsigned char stream_sample(FILE *f)
+unsigned char mode_sample_mpu_stream(FILE *f)
 {
 	if(mode_stream_format_bin==0)
 		return stream_sample_text(f);
@@ -323,21 +323,27 @@ void stream_motion_status(FILE *f,unsigned char bin)
 {
 	unsigned long wps = stat_wakeup*1000l/(stat_t_cur-stat_time_laststatus);
 	//unsigned long cnt_int, cnt_sample_tot, cnt_sample_succcess, cnt_sample_errbusy, cnt_sample_errfull;
-	unsigned long cnt_sample_errbusy, cnt_sample_errfull;
 	
 	//mpu_getstat(&cnt_int, &cnt_sample_tot, &cnt_sample_succcess, &cnt_sample_errbusy, &cnt_sample_errfull);
 	//mpu_getstat(0, 0, 0, &cnt_sample_errbusy, &cnt_sample_errfull);
 
 	unsigned long totframes = mpu_stat_totframes();
 	unsigned long lostframes = mpu_stat_lostframes();
+	unsigned long sr = stat_mpu_samplesendok*1000/(stat_t_cur-stat_timems_start);
 	
 	//if(bin==0)
 	{
+/*
+Format
+# ADC t=2775 ms; V=4205 mV; I=0 mA; P=1 mW; wps=962; sampletot=288; sampleok=288; sampleerr=0 (erroverrun=0; errsend=0); log=0 KB; logmax=0 KB; logfull=0 %
+# SND t=2775 ms; V=4205 mV; I=0 mA; P=1 mW; wps=962; sampletot=95; sampleerr=0 (overrun=0; errsend=0); errppm=0; Numbers are frames; log=0 KB; logmax=0 KB; logfull=0 %
+# MPU t=2775 ms; V=4205 mV; I=0 mA; P=1 mW; wps=962; sampletot=318; sampleok=318; samplerr=0 (overrun=0; errsend=0); sr=114; log=0 KB; logmax=0 KB; logfull=0 %
+*/
 		// Information text
-		fprintf(f,"# MPU t=%lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
-		fprintf(f,"; wps=%lu; errbsy=%lu; errfull=%lu; errsend=%lu; spl=%lu",wps,cnt_sample_errbusy,cnt_sample_errfull,stat_mpu_samplesendfailed,totframes);
-		fprintf(f,"; log=%u KB; logmax=%u KB; logfull=%u %%\n",(unsigned)(ufat_log_getsize()>>10),(unsigned)(ufat_log_getmaxsize()>>10),(unsigned)(ufat_log_getsize()/(ufat_log_getmaxsize()/100l)));
-#warning Add sample per second (either from last status info or from start)
+		fprintf(f,"# MPU t=%05lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
+		fprintf(f,"; wps=%lu; sampletot=%09lu; sampleok=%09lu; samplerr=%09lu (overrun=%09lu; errsend=%09lu); sr=%04lu",wps,totframes,stat_mpu_samplesendok,stat_mpu_samplesendfailed+lostframes,
+									lostframes,stat_mpu_samplesendfailed,sr);
+		_MODE_SAMPLE_STREAM_STATUS_LOGSIZE;
 	}
 	// Binary not implemented
 	/*else
@@ -454,7 +460,7 @@ unsigned char CommandParserMotion(char *buffer,unsigned char size)
 // TODO: each time that a logging starts, stops, or change reset all the statistics and clear the buffers, including resetting the time since running
 void mode_sample_motion(void)
 {
-	unsigned char putbufrv;
+	int putbufrv;
 	
 	fprintf(file_pri,"SMPLMOTION>\n");
 
@@ -483,28 +489,25 @@ void mode_sample_motion(void)
 	
 		
 		// Process user commands only if we do not run for a specified duration
-		if(mode_sample_motion_param.duration==0)
+		if(mode_sample_param_duration==0)
 		{
 			while(CommandProcess(CommandParsersMotionStream,CommandParsersMotionStreamNum));		
 			if(CommandShouldQuit())
 				break;
 		}
+
+		// Send data to primary stream or to log if available
+		FILE *file_stream;
+		if(mode_sample_file_log)
+			file_stream=mode_sample_file_log;
+		else
+			file_stream=file_pri;
+
 		stat_t_cur=timer_ms_get();		// Current time
-		if(mode_sample_motion_param.duration)					// Check if maximum mode time is reached
-		{
-			if(stat_t_cur-stat_timems_start>=mode_sample_motion_param.duration)
-				break;			
-		}
-		if(ltc2942_last_mV()<BATTERY_VERYVERYLOW)				// Stop if batter too low
-		{
-			fprintf(file_pri,"Low battery, interrupting\n");
-			break;
-		}
-		if(stat_t_cur-time_lastblink>1000)						// Blink
-		{		
-			system_led_toggle(0b100);
-			time_lastblink=stat_t_cur;
-		}		
+		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified
+		_MODE_SAMPLE_CHECK_BATTERY_BREAK;				// Stop if battery too low
+		_MODE_SAMPLE_BLINK;								// Blink
+
 		// Display info if enabled
 		if(mode_stream_format_enableinfo)
 		{
@@ -518,45 +521,10 @@ void mode_sample_motion(void)
 		
 
 		// Stream existing data
-		unsigned char l = mpu_data_level();
-		if(!l)
-		{
-			//sleep_cpu();
-			stat_wakeup++;
-		}
-		else
-		{
-			for(unsigned char i=0;i<l;i++)
-			{
-				// Get the data from the auto read buffer; if no data available break
-				if(mpu_data_getnext(&mpumotiondata,&mpumotiongeometry))
-					break;
-				
-				//fprintf(file_pri,"%lu\n",mpu_compute_geometry_time());
-			
-			
-				// Send data to primary stream or to log if available
-				FILE *file_stream;
-				if(mode_sample_file_log)
-					file_stream=mode_sample_file_log;
-				else
-					file_stream=file_pri;
-
-				// Send the samples and check for error
-				putbufrv = stream_sample(file_stream);
-				
-				// Attempt to send and update the statistics in case of success and error
-				if(putbufrv)
-					stat_mpu_samplesendfailed++;	// There was an error in fputbuf: increment the number of samples failed to send.
-				else
-					stat_mpu_samplesendok++;		// Increment success counter
-
-			} // End iterating sample buffer
-		}
+		_MODE_SAMPLE_MPU_GET_AND_SEND;
 		
-		
-		
-
+		// Sleep
+		_MODE_SAMPLE_SLEEP;
 	} // End sample loop
 	
 	// Stop acquiring data

@@ -105,7 +105,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'t', CommandParserTime_Test,help_ttest},
 #endif
 	
-	{'S', CommandParserSampleSound,"S[,<mode>[,<frame>[,<logfile>[,<duration>]]]: Sound streaming/logging. Stream/log sound. Without parameters: list sound recording modes. Otherwise enters the specified mode.\n\t\tOptionally logs to logfile (use -1 not to log) and runs for the specified duration in seconds."},
+	{'S', CommandParserSampleSound,"S[,<mode>[,<frame>[,<logfile>[,<duration>]]]: Sound streaming/logging. No parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
 	{'s', CommandParserAudio,help_audio},
 
 	{'A', CommandParserADC,help_a},
@@ -113,7 +113,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'M', CommandParserMotion,help_M},
 	{'m', CommandParserMPUTest,help_m},
 	{'n', CommandParserMPUTestN,help_m},
-	{'U', CommandParserSampleMultimodal,"U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]: Multimodal streaming/logging. adcmask and adcperiod are ignored if the mode does not include ADC."},
+	{'U', CommandParserSampleMultimodal,"U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]: Multimodal streaming/logging.\n\t\tadcmask and adcperiod are ignored if the mode does not include ADC.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
 	//{'C', CommandParserClock,help_c},
 	//{'V', CommandParserDemo,help_demo},
 	{'B', CommandParserBench,help_b},

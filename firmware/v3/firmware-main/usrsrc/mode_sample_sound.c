@@ -93,25 +93,19 @@ void mode_sample_sound(void)
 			if(CommandShouldQuit())
 				break;
 		}
-		// Stop if batter too low
-		if(ltc2942_last_mV()<BATTERY_VERYVERYLOW)
-		{
-			fprintf(file_pri,"Low battery, interrupting\n");
-			break;
-		}
+
+		// Send data to primary stream or to log if available
+		FILE *file_stream;
+		if(mode_sample_file_log)
+			file_stream=mode_sample_file_log;
+		else
+			file_stream=file_pri;
+
 		stat_t_cur=timer_ms_get();		// Current time
-		if(mode_sample_param_duration)
-		{
-			// Check if maximum mode time is reached
-			if(stat_t_cur-stat_timems_start>=mode_sample_param_duration)
-				break;
-		}
-		// Blink
-		if(stat_t_cur-time_lastblink>1000)
-		{
-			system_led_toggle(0b100);
-			time_lastblink=stat_t_cur;
-		}
+		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified
+		_MODE_SAMPLE_CHECK_BATTERY_BREAK;				// Stop if battery too low
+		_MODE_SAMPLE_BLINK;								// Blink
+
 		// Display info if enabled
 		if(mode_stream_format_enableinfo)
 		{
@@ -123,32 +117,11 @@ void mode_sample_sound(void)
 			}
 		}
 
-		// Stream existing data - up to a maximum of N samples/frames
-		unsigned maxctr=0;
-		while(!stm_dfsdm_data_getnext(audbuf,&audbufms,&audbufpkt) && (maxctr++<100))		// maxctr provides an exit to process other things
-		{
-			// Send data to primary stream or to log if available
-			FILE *file_stream;
-			if(mode_sample_file_log)
-				file_stream=mode_sample_file_log;
-			else
-				file_stream=file_pri;
-
-			// Send the samples and check for error
-			putbufrv = audio_stream_sample(audbuf,audbufms,audbufpkt,file_stream);
-
-			// Update the statistics in case of errors
-			if(putbufrv)
-			{
-				// There was an error in fputbuf: increment the number of samples failed to send.
-				stat_snd_samplesendfailed+=putbufrv;
-			}
-
-		}
+		// Stream existing data
+		_MODE_SAMPLE_SOUND_GET_AND_SEND;
 
 		// Sleep
-		system_sleep();
-		stat_wakeup++;
+		_MODE_SAMPLE_SLEEP;
 	} // End sample loop
 
 	// Stop acquiring data
@@ -486,18 +459,22 @@ void stream_sound_status(FILE *f,unsigned char bin)
 
 	// Statistics in frames or samples
 	// Total error is lost frame during acquisition and samples/frames not sent.
-	unsigned long toterr,totsample,overrun;
+	unsigned long toterr,totsample,overrun,sendok,sr;
 	if(mode_sample_sound_param_framebased)
 	{
 		toterr = stm_dfsdm_stat_lostframes() + stat_snd_samplesendfailed;
 		totsample = stm_dfsdm_stat_totframes();
 		overrun = stm_dfsdm_stat_lostframes();
+		sendok = stat_snd_samplesendok;
+		sr =  stat_snd_samplesendok*SAMPLE_SOUND_DEBUG_NUMSTREAM*1000/(stat_t_cur-stat_timems_start);
 	}
 	else
 	{
 		toterr = stm_dfsdm_stat_lostframes()*STM_DFSMD_BUFFER_SIZE + stat_snd_samplesendfailed;
 		totsample = stm_dfsdm_stat_totframes()*STM_DFSMD_BUFFER_SIZE;
 		overrun = stm_dfsdm_stat_lostframes()*STM_DFSMD_BUFFER_SIZE;
+		sendok = stat_snd_samplesendok*SAMPLE_SOUND_DEBUG_NUMSTREAM;
+		sr =  sendok*1000/(stat_t_cur-stat_timems_start);
 	}
 
 	unsigned long errppm = (unsigned long long)toterr*1000000/totsample;			// Computation on 64-bit needed
@@ -508,15 +485,16 @@ void stream_sound_status(FILE *f,unsigned char bin)
 
 	//if(bin==0)
 	{
-		fprintf(f,"# SND t=%lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
+		fprintf(f,"# SND t=%05lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
 		fprintf(f,"; wps=%lu",wps);
-		fprintf(f,"; sampletot=%lu; sampleerr=%lu (overrun=%lu; errsend=%lu); errppm=%lu; Numbers are %s",
-				totsample,toterr,
+		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; sampleerr=%09lu (overrun=%09lu; errsend=%09lu); errppm=%lu; Numbers are %s; sr=%05lu",
+				totsample,sendok,
+				toterr,
 				overrun,stat_snd_samplesendfailed,
 				errppm,
-				mode_sample_sound_param_framebased?"frames":"samples");
-		fprintf(f,"; log=%u KB; logmax=%u KB; logfull=%u %%\n",(unsigned)(ufat_log_getsize()>>10),(unsigned)(ufat_log_getmaxsize()>>10),(unsigned)(ufat_log_getsize()/(ufat_log_getmaxsize()/100l)));
-#warning Add sample per second (either from last status info or from start)
+				mode_sample_sound_param_framebased?"frames":"samples",
+				sr);
+		_MODE_SAMPLE_STREAM_STATUS_LOGSIZE;
 	}
 	// Binary mode not implemented
 	/*else

@@ -240,15 +240,14 @@ void mode_sample_adc(void)
 {
 	unsigned short data[STM_ADC_MAXCHANNEL];		// Buffer to hold a copy of ADC data
 
-	unsigned long stat_totsample=0;
 	unsigned long stat_timems_end=0;
-	unsigned char putbufrv;
+	int putbufrv;
 	
 	
 	fprintf(file_pri,"SMPLADC>\n");
 
 	// Packet init
-	packet_init(&adcpacket,"DXX",3);
+	packet_init(&adcpacket,"DAA",3);
 	// Init log file
 	mode_sample_file_log=0;										// Initialise log to null
 	if(mode_sample_startlog(mode_sample_param_logfile))			// Initialise log will be initiated if needed here
@@ -293,21 +292,10 @@ void mode_sample_adc(void)
 		}
 
 		stat_t_cur=timer_ms_get();						// Current time
-		if(mode_sample_param_duration)					// Check if maximum mode time is reached
-		{
-			if(stat_t_cur-stat_timems_start>=mode_sample_param_duration*1000)
-				break;
-		}
-		if(ltc2942_last_mV()<BATTERY_VERYVERYLOW)				// Stop if batter too low
-		{
-			fprintf(file_pri,"Low battery, interrupting\n");
-			break;
-		}
-		if(stat_t_cur-time_lastblink>1000)						// Blink
-		{
-			system_led_toggle(0b100);
-			time_lastblink=stat_t_cur;
-		}
+		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified
+		_MODE_SAMPLE_CHECK_BATTERY_BREAK;				// Stop if battery too low
+		_MODE_SAMPLE_BLINK;								// Blink
+
 		if(mode_stream_format_enableinfo)						// Display info if enabled
 		{
 			if(stat_t_cur-stat_time_laststatus>MODE_SAMPLE_INFOEVERY_MS)
@@ -318,43 +306,11 @@ void mode_sample_adc(void)
 			}
 		}
 		
-		// Check data
-		unsigned numchannels;
-		unsigned long pktsample,timesample;
-		if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
-		{
-			if(mode_adc_fastbin)
-			{
-				putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
-			}
-			else
-			{
-				// Encode the samples
-				if(!mode_stream_format_bin)
-				{
-					// Plain text encoding
-					putbufrv = mode_sample_adc_streamtext(file_stream,pktsample,timesample,numchannels,data);
-				}
-				else
-				{
-					putbufrv = mode_sample_adc_streambin(file_stream,pktsample,timesample,numchannels,data);
-				}
-			}
-
-			// Attempt to send and update the statistics in case of success and error
-			if(putbufrv)
-				stat_adc_samplesendfailed++;	// There was an error in fputbuf: increment the number of samples failed to send.
-			else
-				stat_adc_samplesendok++;		// Increment success counter
-			// Update the overall statistics
-			stat_totsample++;
-
-		} // while(!stm_adc_data_getnext(data,&adcnc,&adcms,&adcpkt))
+		// Acquire and send data if available
+		_MODE_SAMPLE_ADC_GET_AND_SEND;
 
 		// Sleep
-		system_sleep();
-		stat_wakeup++;
-
+		_MODE_SAMPLE_SLEEP;
 	} // End sample loop
 	stat_timems_end = timer_ms_get();
 	
@@ -370,7 +326,7 @@ void mode_sample_adc(void)
 	// Print statistics
 	stream_adc_status(file_pri,0);
 
-	unsigned long sps = stat_totsample*1000/(stat_timems_end-stat_timems_start);
+	unsigned long sps = (stat_adc_samplesendok+stat_adc_samplesendfailed)*1000/(stat_timems_end-stat_timems_start);
 	fprintf(file_pri,"%lu samples/sec\n",sps);
 
 
@@ -500,15 +456,15 @@ void stream_adc_status(FILE *f,unsigned char bin)
 
 	unsigned long totframes = stm_adc_stat_totframes();
 	unsigned long lostframes = stm_adc_stat_lostframes();
+	unsigned long sr = stat_adc_samplesendok*1000/(stat_t_cur-stat_timems_start);
 
 	//if(bin==0)
 	{
 		// Information text
-		fprintf(f,"# ADC t=%lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
+		fprintf(f,"# ADC t=%05lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
 		fprintf(f,"; wps=%lu",wps);
-		fprintf(f,"; sampletot=%lu; sampleok=%lu; sampleerr=%lu (erroverrun=%lu; errsend=%lu)",totframes,stat_adc_samplesendok,stat_adc_samplesendfailed+lostframes,lostframes,stat_adc_samplesendfailed);
-		fprintf(f,"; log=%u KB; logmax=%u KB; logfull=%u %%\n",(unsigned)(ufat_log_getsize()>>10),(unsigned)(ufat_log_getmaxsize()>>10),(unsigned)(ufat_log_getsize()/(ufat_log_getmaxsize()/100l)));
-#warning Add sample per second (either from last status info or from start)
+		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; sampleerr=%09lu (overrun=%09lu; errsend=%09lu); sr=%04lu",totframes,stat_adc_samplesendok,stat_adc_samplesendfailed+lostframes,lostframes,stat_adc_samplesendfailed,sr);
+		_MODE_SAMPLE_STREAM_STATUS_LOGSIZE;
 	}
 // Binary mode not implemented
 	/*else
@@ -532,3 +488,17 @@ void stream_adc_status(FILE *f,unsigned char bin)
 		fputbuf(f,(char*)p.data,s);
 	}*/
 }
+
+
+unsigned char mode_sample_adc_stream(FILE *file_stream,unsigned long pktsample,unsigned long timesample,unsigned numchannels,unsigned short *data)
+{
+	if(!mode_stream_format_bin)
+	{
+		// Plain text encoding
+		return mode_sample_adc_streamtext(file_stream,pktsample,timesample,numchannels,data);
+	}
+
+	return mode_sample_adc_streambin(file_stream,pktsample,timesample,numchannels,data);
+}
+
+
