@@ -2,6 +2,7 @@
 
 ![BlueSense4](/img/side.png | width=200)
 
+
 BlueSense4 - an extensible wearable motion sensing and IoT platform based on a ARM Cortex M4 (STM32L496).
 
 Key features:
