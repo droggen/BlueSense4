@@ -1,6 +1,6 @@
 # BlueSense4
 
-![GitHub Logo](/img/side.png)
+![BlueSense4](/img/side.png | width=200)
 
 BlueSense4 - an extensible wearable motion sensing and IoT platform based on a ARM Cortex M4 (STM32L496).
 
@@ -17,12 +17,13 @@ Key features:
   * Multimodal sensing: audio + motion + ADC
   * Logging and streaming
   * Extensible
-  * Compatible with BlueSense2
   * Bluetooth 2.0
   * USB
   * SD card
   * EEPROM
-  * DFU
+  * Coulomb counter
+  * DFU  
+  * Compatible with BlueSense2
   
   
   
