@@ -150,9 +150,9 @@ void mode_sample_multimodal(void)
 	fprintf(file_pri,"SMPMULTIMODAL>\n");
 
 	// Packet init
-	packet_init(&adcpacket,"DAD",3);
+	packet_init(&adcpacket,"DAA",3);
 	PACKET mpupacket;
-	packet_init(&mpupacket,"DMP",3);
+	packet_init(&mpupacket,"DXX",3);
 
 
 	// Init log file

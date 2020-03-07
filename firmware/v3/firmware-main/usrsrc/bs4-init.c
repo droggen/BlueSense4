@@ -32,6 +32,7 @@
 #include "ufat.h"
 #include "sd/stm_sdio.h"
 #include "stmdfsdm.h"
+#include "uiconfig.h"
 
 void bs4_init()
 {
@@ -189,9 +190,9 @@ void bs4_init_extended()
 
 
 //#if NOBLUETOOTHINIT==1
-	system_devname[0]='D';system_devname[1]='B';system_devname[2]='G';system_devname[3]=0;
+	//system_devname[0]='D';system_devname[1]='B';system_devname[2]='G';system_devname[3]=0;
 //#else
-	//rn41_Setup(file_usb,file_bt,system_devname);
+	rn41_Setup(file_usb,file_bt,system_devname);
 //#endif
 
 #else
@@ -232,7 +233,7 @@ void bs4_init_extended()
 
 	// MPU INITIALISATION
 	fprintf(file_pri,"Initialise MPU\n");
-	//mpu_init();
+	mpu_init();
 
 #if 0
 	// Estimate baseline performance (optional)
@@ -304,7 +305,7 @@ void bs4_init_extended()
 	//stm_sdm_init();					// This will be called by FatFs driver
 	ufat_init();
 
-#if 0
+#if 1
 	// Load and set the boot script
 	char buf[CONFIG_ADDR_SCRIPTLEN];
 	ConfigLoadScript(buf);
