@@ -40,8 +40,7 @@ extern volatile unsigned long Serial1EvtWithinInt;
 
 
 #define SERIAL_UART_RX_BUFFERSIZE 512
-//#define SERIAL_UART_TX_BUFFERSIZE 512
-#define SERIAL_UART_TX_BUFFERSIZE 512
+#define SERIAL_UART_TX_BUFFERSIZE 2048
 
 //#define USART_FLAG_CTS   ((uint16_t)0x0200)
 //#define USART_FLAG_LBD   ((uint16_t)0x0100)
@@ -105,6 +104,7 @@ void serial_uart_clearbuffers(void);
 
 void serial_uart_printreg(FILE *f);
 void serial_uart_printevents(FILE *f);
+void serial_uart_clearevents();
 
 #endif // __SERIAL_UART_H
 

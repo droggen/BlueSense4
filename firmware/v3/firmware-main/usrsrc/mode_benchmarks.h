@@ -5,8 +5,10 @@
  *      Author: droggen
  */
 
-#ifndef MODE_BENCHMARKCPU_H_
-#define MODE_BENCHMARKCPU_H_
+#ifndef MODE_BENCHMARKS_H_
+#define MODE_BENCHMARKS_H_
+
+#include <stdio.h>
 
 void mode_benchmarkcpu(void);
 
@@ -17,6 +19,6 @@ unsigned char CommandParserBenchUSB(char *buffer,unsigned char size);
 unsigned char CommandParserBenchBT(char *buffer,unsigned char size);
 unsigned char CommandParserBenchITM(char *buffer,unsigned char size);
 
-void benchitf(FILE *fbench,FILE *finfo);
+void benchmark_interface(FILE *fbench,FILE *finfo);
 
-#endif /* MODE_BENCHMARKCPU_H_ */
+#endif /* MODE_BENCHMARKS_H_ */

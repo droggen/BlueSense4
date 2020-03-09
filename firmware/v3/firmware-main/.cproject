@@ -53,6 +53,7 @@
 									<listOptionValue builtIn="false" value="../usrsrc/helper"/>
 									<listOptionValue builtIn="false" value="../usrsrc/megalol"/>
 									<listOptionValue builtIn="false" value="../usrsrc/FATFS"/>
+									<listOptionValue builtIn="false" value="../usrsrc/FATFS/Target"/>
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.2042175122" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="USE_FULL_LL_DRIVER"/>

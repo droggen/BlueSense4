@@ -160,12 +160,7 @@ void mode_sample_multimodal(void)
 	if(mode_sample_startlog(mode_sample_param_logfile))			// Initialise log will be initiated if needed here
 		goto mode_sample_multimodal_end;
 
-	// Send data to primary stream or to log if available
-	FILE *file_stream;
-	if(mode_sample_file_log)
-		file_stream=mode_sample_file_log;
-	else
-		file_stream=file_pri;
+
 
 	// Load mode configuration
 	stream_load_persistent_frame_settings();
@@ -219,6 +214,13 @@ void mode_sample_multimodal(void)
 			// Process all user commands
 			while(CommandProcess(CommandParsersMultimodal,CommandParsersMultimodalNum));
 		//}
+
+		// Send data to primary stream or to log if available
+		FILE *file_stream;
+		if(mode_sample_file_log)
+			file_stream=mode_sample_file_log;
+		else
+			file_stream=file_pri;
 
 		stat_t_cur=timer_ms_get();						// Current time
 		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified

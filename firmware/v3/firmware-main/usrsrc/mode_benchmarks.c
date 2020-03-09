@@ -5,6 +5,7 @@
  *      Author: droggen
  */
 
+#include <mode_benchmarks.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -24,8 +25,7 @@
 #include "usrmain.h"
 #include "main.h"
 #include "mode.h"
-#include "mode_benchmarkcpu.h"
-
+#include "mode_main.h"
 #include "benchmark/noprompt/dhry.h"
 #include "benchmark/whetstone.h"
 
@@ -37,7 +37,7 @@ const char help_benchbt[] ="Benchmark BT write";
 const char help_benchitm[] ="Benchmark ITM write";
 
 
-const COMMANDPARSER CommandParsersBenchmarkCPU[] =
+const COMMANDPARSER CommandParsersBenchmarks[] =
 {
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
@@ -48,13 +48,13 @@ const COMMANDPARSER CommandParsersBenchmarkCPU[] =
 	{'B', CommandParserBenchBT,help_benchbt},
 	{'I', CommandParserBenchITM,help_benchitm},
 };
-unsigned char CommandParsersBenchmarkCPUNum=sizeof(CommandParsersBenchmarkCPU)/sizeof(COMMANDPARSER);
+unsigned char CommandParsersBenchmarksNum=sizeof(CommandParsersBenchmarks)/sizeof(COMMANDPARSER);
 
 
 
 void mode_benchmarkcpu(void)
 {
-	mode_run("BENCHCPU",CommandParsersBenchmarkCPU,CommandParsersBenchmarkCPUNum);
+	mode_run("BENCH",CommandParsersBenchmarks,CommandParsersBenchmarksNum);
 }
 
 unsigned char CommandParserBenchmarkCPU1(char *buffer,unsigned char size)
@@ -143,40 +143,63 @@ unsigned char CommandParserBenchmarkCPUMem(char *buffer,unsigned char size)
 unsigned char CommandParserBenchUSB(char *buffer,unsigned char size)
 {
 	(void)buffer; (void)size;
-	benchitf(file_pri,file_itm);
+	benchmark_interface(file_usb,file_pri);
 	return 0;
 }
 unsigned char CommandParserBenchBT(char *buffer,unsigned char size)
 {
 	(void)buffer; (void)size;
-	benchitf(file_bt,file_itm);
+	fprintf(file_pri,"UART events before:\n");
+	fprintf(file_usb,"UART events before:\n");
+	serial_uart_printevents(file_pri);
+	serial_uart_printevents(file_usb);
+	benchmark_interface(file_bt,file_pri);
+	fprintf(file_pri,"UART events after:\n");
+	fprintf(file_usb,"UART events after:\n");
+	serial_uart_printevents(file_pri);
+	serial_uart_printevents(file_usb);
 	return 0;
 }
 unsigned char CommandParserBenchITM(char *buffer,unsigned char size)
 {
 	(void)buffer; (void)size;
-	benchitf(file_itm,file_usb);
+	benchmark_interface(file_itm,file_pri);
 	return 0;
 }
 
 
 
-// Benchmark an interface fbench; prints additional info to finfo
-void benchitf(FILE *fbench,FILE *finfo)
-{
-	fprintf(file_pri,"Benchmarking\n");
+/******************************************************************************
+	function: benchmark_interface
+*******************************************************************************
+	Benchmark an interface fbench; prints additional info to finfo
+
+	Parameters:
+		fbench				-		Interface to benchmark
+		findo				-		Interface where to print information (benchmark results)
+
+	Returns:
+		-
+******************************************************************************/
+void benchmark_interface(FILE *fbench,FILE *finfo)
+{	unsigned long int t_last,t_cur;
+	unsigned long tint1,tint2;
+	unsigned payloadsize = 256;		// Payload size
+	unsigned benchtime = 2;			// benchmark duration in seconds
+	char s[payloadsize+1];			// Payload
+
+
+
+	// Fill buffer with data. Last character is \n.
+	for(unsigned i=0;i<payloadsize-1;i++)
+		s[i] = '0'+i%10;
+	s[payloadsize-1] = '\n';
+	s[payloadsize] = 0;
+
+
 	fprintf(finfo,"Benchmarking\n");
 
-	char s[257];
-
-	// Fill buffer with data
-	for(unsigned i=0;i<255;i++)
-		s[i] = '0'+i%10;
-	s[255] = '\n';
-	s[256] = 0;
-
-
-	// Benchmark frwite, fputs, fputc
+	// Benchmark fwrite, fputs, fputc
 
 
 	// Transfer 128KB
@@ -187,8 +210,23 @@ void benchitf(FILE *fbench,FILE *finfo)
 	unsigned int t1,t2;
 	unsigned int bps;
 
-	/*fprintf(file_pri,"Benchmarking fwrite. Tot: %u.\n",size);
-	fprintf(finfo,"Benchmarking fwrite. Tot: %u.\n",size);
+	fprintf(finfo,"Benchmarking fwrite for %u seconds.\n",benchtime);
+
+	nwritten = 0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		int nw = fwrite(s,1,payloadsize,fbench);				// payload elements of size 1
+		nwritten+=nw;										// Number of elements successfully written
+	}
+	tint2=timer_ms_get_intclk();
+
+	fprintf(finfo,"Time: %lu ms. ",tint2-tint1);
+	fprintf(finfo,"Bytes written: %lu. ",nwritten);
+	fprintf(finfo,"Bandwidth: %lu bps. \n",nwritten*1000/(tint2-tint1));
+
+	return;
+#if 0
 	nwritten=0;
 	t1 = HAL_GetTick();
 	for(unsigned i=0;i<it;i++)
@@ -233,7 +271,7 @@ void benchitf(FILE *fbench,FILE *finfo)
 
 	fprintf(file_pri,"Benchmarking fputbuf. Tot: %u.\n",size);
 	fprintf(finfo,"Benchmarking fputbuf. Tot: %u.\n",size);*/
-
+#endif
 /*	HAL_Delay(1000);
 
 	fprintf(file_pri,"Benchmarking fputc. Tot: %u.\n",size);
@@ -258,6 +296,7 @@ void benchitf(FILE *fbench,FILE *finfo)
 	fprintf(file_pri,"fputc transfer of %u bytes. Effective: %u. Time: %u ms. Bandwidth: %u byte/s\n",size,nwritten,t2-t1,bps);
 	fprintf(finfo,"fputc transfer of %u bytes. Effective: %u. Time: %u ms. Bandwidth: %u byte/s\n",size,nwritten,t2-t1,bps);
 	*/
+	/*
 
 	HAL_Delay(1000);
 
@@ -281,8 +320,9 @@ void benchitf(FILE *fbench,FILE *finfo)
 	bps = size*1000/(t2-t1);
 	fprintf(file_pri,"fputbuf transfer of %u bytes. Effective: %u. Time: %u ms. Bandwidth: %u byte/s\n",size,nwritten,t2-t1,bps);
 	fprintf(finfo,"fputbuf transfer of %u bytes. Effective: %u. Time: %u ms. Bandwidth: %u byte/s\n",size,nwritten,t2-t1,bps);
+	*/
 
-	fprintf(file_pri,"Benchmark end\n");
+
 	fprintf(finfo,"Benchmark end\n");
 
 

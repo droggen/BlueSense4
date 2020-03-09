@@ -98,8 +98,8 @@ void buffer_put(volatile CIRCULARBUFFER *io, unsigned char c)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-	io->buffer[io->wrptr]=c;
-	io->wrptr=(io->wrptr+1)&(io->mask);
+		io->buffer[io->wrptr]=c;
+		io->wrptr=(io->wrptr+1)&(io->mask);
 	}
 }
 /******************************************************************************

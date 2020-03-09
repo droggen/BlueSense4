@@ -28,6 +28,15 @@ unsigned char USB_TX_DataBuffer[USB_BUFFERSIZE];
 uint8_t CDC_TryTransmit_FS();
 
 
+unsigned char serial_usb_txcallback(unsigned char p)
+{
+	(void)p;
+	if(buffer_level(&SERIALPARAM_USB.txbuf))
+
+		CDC_TryTransmit_FS();
+	return 0;
+}
+
 
 FILE *serial_open_usb()
 {

@@ -547,6 +547,7 @@ void rn41_PrintOtherParam(FILE *file,unsigned short sniff,unsigned short lp)
 	Returns:
 		-
 ******************************************************************************/
+#warning Not clear if devname is input or output
 void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 {
 	/*
@@ -595,8 +596,8 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	unsigned char p_cfgtimer = 0;						// 255=unlimited local/remote; 0=local only when not connected. 255 leads to instability (reboots) under high throughput, also lowers bitrate
 	char p_mode = 0;									// Slave
 	char p_auth = 0;									// No authentication
-	//const char *p_pin="0000";							// PIN
-	const char *p_pin="1111";							// PIN
+	const char *p_pin="0000";							// PIN
+	//const char *p_pin="1111";							// PIN
 	//const char *p_name="BlueSense4";					// Name
 	const char *p_name="BlueSens4";					// Name
 	
@@ -644,7 +645,7 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	if(p_sniff != sniff) config = 1;
 	if(p_lowpower != lowpower) config = 1;
 	if(strcmp(p_pin,pin)!=0) config = 1;
-	if(strncmp(p_name,name,strlen(p_name))!=0 || strlen(name)!=strlen(p_name)+5) config = 1;
+	if(strncmp(p_name,name,strlen(p_name))!=0 || strlen(name)!=strlen(p_name)+5) config = 1;			// If the name does not start by p_name followed by 5 characters (-xxxx) then reconfig
 	
 	if(config==1)
 	{
@@ -692,8 +693,13 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	// Copy the device name
 	if(devname)
 	{
+		fprintf(file,"Copy dev name\n");
+		HAL_Delay(100);
 		for(int i=0;i<4;i++) devname[i] = name[strlen(p_name)+1+i];
 		devname[4]=0;
+
+		fprintf(file,"Copy dev name done\n");
+		HAL_Delay(100);
 	}
 	
 	//printf("Set pass data in cmd mode\n");

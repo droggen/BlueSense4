@@ -52,7 +52,7 @@
 //#include "mode_mputest.h"
 #include "mode_audio.h"
 #include "mode_adc.h"
-#include "mode_benchmarkcpu.h"
+#include <mode_benchmarks.h>
 #include "mode_sample_sound.h"
 #include "mode_sample_multimodal.h"
 #include "mode_dac.h"
@@ -116,7 +116,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'U', CommandParserSampleMultimodal,"U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]: Multimodal streaming/logging.\n\t\tadcmask and adcperiod are ignored if the mode does not include ADC.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
 	//{'C', CommandParserClock,help_c},
 	//{'V', CommandParserDemo,help_demo},
-	{'B', CommandParserBench,help_b},
+	//{'B', CommandParserBench,help_b},
 	//{'I', CommandParserIO,help_i},
 	{'I', CommandParserInterface,help_interface},
 
@@ -142,7 +142,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'~', CommandParserClearBootCounter,help_clearbootctr},
 	//{'x', CommandParserx,help_x}
 	{'E',CommandParserEEPROM,help_eeprom},
-	{'K',CommandParserBenchmark,help_benchmark},
+	//{'K',CommandParserBenchmark,help_benchmark},
 	{'u',CommandParserUSB,help_usbreinit},
 	{'.',CommandParserInterrupts,help_interrupts},
 	{'2',CommandParserI2CTest,help_i2c},

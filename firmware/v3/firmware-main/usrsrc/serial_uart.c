@@ -21,12 +21,14 @@
 #include "system.h"
 #include "global.h"
 
+#warning significant overrun errors when receiving data at 460K.
+
 SERIALPARAM _serial_uart_param[SERIALUARTNUMBER];
 char _serial_uart_param_used[SERIALUARTNUMBER];
 
 // Memory for the circular buffers
-unsigned char _serial_uart_rx_buffer[SERIALUARTNUMBER][SERIAL_UART_TX_BUFFERSIZE];
-unsigned char _serial_uart_tx_buffer[SERIALUARTNUMBER][SERIAL_UART_RX_BUFFERSIZE];
+unsigned char _serial_uart_rx_buffer[SERIALUARTNUMBER][SERIAL_UART_RX_BUFFERSIZE];
+unsigned char _serial_uart_tx_buffer[SERIALUARTNUMBER][SERIAL_UART_TX_BUFFERSIZE];
 
 volatile unsigned long Serial1DOR=0;				// Data overrun
 volatile unsigned long Serial1NR=0;					//
@@ -34,6 +36,7 @@ volatile unsigned long Serial1FE=0;					//
 volatile unsigned long Serial1PE=0;					//
 volatile unsigned long Serial1TXE=0;					//
 volatile unsigned long Serial1RXNE=0;					//
+volatile unsigned long Serial1CTS=0;					//
 volatile unsigned long Serial1Int=0;					// Total interrupt
 volatile unsigned long Serial1EvtWithinInt=0;		// Counts if there is a new int-triggering flag set during the interrupt process, could be used to speed up
 
@@ -107,7 +110,9 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	// Buffering can lead to issues when entering command modes ($$$)
 	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	//setvbuf (f, 0, _IOLBF, 1024);	// Line buffer buffering
-	setvbuf (f, 0, _IOLBF, 16);	// Line buffer buffering
+	//setvbuf (f, 0, _IOLBF, 16);	// Line buffer buffering
+	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+
 
 
 	//serial_associate(f,sp);			// Use big hack with f->_cookie below
@@ -339,9 +344,10 @@ void serial_usart_interruptenable(USART_TypeDef *h)
 	// RX, TX interrupt enable
 
 	h->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
-	//h->CR1 |= USART_CR1_TCIE;			// Transmission complete interrupt enable
 
 	h->CR1 |= USART_CR1_RXNEIE;			// RX not empty interrupt enable
+
+	h->CR3 |= USART_CR3_CTSIE;		// Enable CTS interrupt
 
 
 }
@@ -476,28 +482,20 @@ void serial_usart_irq(USART_TypeDef *h)
 	}
 
 
-	// RX interrupt?
-	/*if(USART2->SR & USART_FLAG_RXNE)
-	{
-		char c = USART2->DR;
-		itmprintf("\tRX: %c\n",c);
-	}*/
-	/*if(h->SR & USART_FLAG_TXE)
-	{
-		itmprintf("\tTXE\n");
-	}
-	USART2->CR1 &= ~USART_CR1_TXEIE;
-
-	return;*/
-
-
 
 
 
 	// Find interrupt type
 
+	// CTS interrupt
+	if(sr & USART_ISR_CTSIF)
+	{
+		Serial1CTS++;
+		h->ICR|=USART_ICR_CTSCF;
+	}
+
 	// RX interrupt?
-	if(sr & USART_FLAG_RXNE)
+	if(sr & USART_ISR_RXNE)
 	{
 		char c = h->RDR;
 
@@ -509,7 +507,8 @@ void serial_usart_irq(USART_TypeDef *h)
 		if(!buffer_isfull(&_serial_uart_param[p].rxbuf))
 			buffer_put(&_serial_uart_param[p].rxbuf,c);
 	}
-	if(sr & USART_FLAG_ORE)
+
+	if(sr & USART_ISR_ORE)
 	{
 		// Overrun error
 		//itmprintf("\tORE\n");
@@ -527,6 +526,8 @@ void serial_usart_irq(USART_TypeDef *h)
 		// Increment the overrun counter
 		Serial1DOR++;
 	}
+
+#if 0
 	if(sr & USART_FLAG_NF)
 	{
 		// Noise flag
@@ -556,7 +557,8 @@ void serial_usart_irq(USART_TypeDef *h)
 
 		Serial1PE++;
 	}
-	if( (sr & USART_FLAG_TXE) && (h->CR1&USART_CR1_TXEIE) )
+#endif
+	if( (sr & USART_FLAG_TXE) && (h->CR1&USART_CR1_TXEIE) )			// Must check for TXEIE so that we do not accumulate TXE counts while no TX was intended.
 	{
 		//itmprintf("\tTXE\n");
 
@@ -878,6 +880,18 @@ int serial_uart_txbufferfree(int p)
 	return buffer_freespace(&_serial_uart_param[p].txbuf);
 }
 
+/*
+Test when issuing H to RN41: counter
+460K:
+	22 overrun with cts rts
+	302 overrun with none
+	23 with rts
+	321 with cts
+230K:
+	5 with rts
+RTS: output of STM32 indicating readiness to receive data. RTS prevents receive underruns.
+
+*/
 // Speed: 115200, etc.
 void serial_uart_init_ll(int speed)
 {
@@ -890,6 +904,8 @@ void serial_uart_init_ll(int speed)
 	USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
 	USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS_CTS;
 	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
+	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS;
+	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_CTS;
 	USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
 	LL_USART_Disable(USART2);
 	ErrorStatus status = LL_USART_Init(USART2, &USART_InitStruct);
@@ -941,5 +957,19 @@ void serial_uart_printevents(FILE *f)
 	fprintf(f,"\tFE: %lu\n",Serial1FE);
 	fprintf(f,"\tRXNE: %lu\n",Serial1RXNE);
 	fprintf(f,"\tTXE: %lu\n",Serial1TXE);
+	fprintf(f,"\tCTS: %lu\n",Serial1CTS);
 	fprintf(f,"\tEvents during interrupt: %lu\n",Serial1EvtWithinInt);
 }
+void serial_uart_clearevents()
+{
+	Serial1DOR = 0;
+	Serial1NR = 0;
+	Serial1PE = 0;
+	Serial1FE = 0;
+	Serial1TXE = 0;
+	Serial1RXNE = 0;
+	Serial1CTS=0;
+	Serial1EvtWithinInt = 0;
+	Serial1Int=0;
+}
+

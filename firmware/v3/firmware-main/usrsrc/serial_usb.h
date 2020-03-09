@@ -17,7 +17,7 @@ extern SERIALPARAM SERIALPARAM_USB;
 
 
 void serial_usb_initbuffers();
-
+unsigned char serial_usb_txcallback(unsigned char p);
 
 FILE *serial_open_usb();
 ssize_t serial_usb_cookie_read(void *__cookie, char *__buf, size_t __n);

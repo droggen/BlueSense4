@@ -84,7 +84,7 @@ const char help_interrupts[] = "Interrupt tryouts";
 const char help_i2c[] = "I2C tests";
 //const char help_clear[] PROGMEM ="Lists timer callbacks";
 const char help_interface[]="Interface funcions (benchmark, swap, etc)";
-const char help_benchmark[]="CPU benchmark";
+const char help_benchmark[]="CPU and IO benchmarks";
 const char help_fat[]="fat test";
 const char help_sleep[] = "s,<0|1> Enable (1) or disable (0) sleep while waiting user input";
 const char help_cpureg[] = "Print CPU registers";
@@ -929,6 +929,7 @@ unsigned char CommandParserInterface(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 	CommandChangeMode(APP_MODE_INTERFACE);
+	return 0;
 }
 unsigned char CommandParserInterrupts(char *buffer,unsigned char size)
 {

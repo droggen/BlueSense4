@@ -37,7 +37,7 @@
 #include "commandset.h"
 #include "mode_adc.h"
 #include "mode_sample_adc.h"
-//#include "mode_bench.h"
+///#include "mode_benchio.h"
 //#include "mode_idle.h"
 #include "mode_sd.h"
 #if ENABLEMODECOULOMB==1
@@ -59,11 +59,11 @@
 #include <mode_i2ctst.h>
 //#include "mode_mputest.h"
 #include "mode_mputest_n.h"
-/*#include "mode_interface.h"*/
+#include "mode_interface.h"
 #include "mode_audio.h"
 #include "mode_sample_sound.h"
 #include "mode_sample_multimodal.h"
-#include "mode_benchmarkcpu.h"
+#include <mode_benchmarks.h>
 #include "mode_dac.h"
 
 void mode_dispatch(void)
@@ -99,11 +99,11 @@ void mode_dispatch(void)
 				break;
 #endif
 */
-/*			case APP_MODE_BENCHIO:
-				mode_bench();
+			/*case APP_MODE_BENCHIO:
+				mode_benchio();
 				system_mode=APP_MODE_MAIN;
-				break;
-*/
+				break;*/
+
 #if BUILD_BLUETOOTH==1
 #if DBG_RN41TERMINAL==1
 			case APP_MODE_BT:
@@ -169,10 +169,10 @@ void mode_dispatch(void)
 				mode_i2ctst();
 				system_mode=APP_MODE_MAIN;
 				break;
-/*			case APP_MODE_INTERFACE:
+			case APP_MODE_INTERFACE:
 				mode_interface();
 				system_mode=APP_MODE_MAIN;
-				break;*/
+				break;
 			case APP_MODE_AUDIO:
 				mode_audio();
 				system_mode=APP_MODE_MAIN;

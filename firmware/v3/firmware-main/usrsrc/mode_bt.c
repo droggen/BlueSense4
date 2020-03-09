@@ -64,7 +64,6 @@ void mode_bt(void)
 	int c;
 	
 	fprintf(file_usb,"bt mode\n");
-	//fprintf(file_pri,PSTR("bt mode\n"));
 	help();	
 	
 	// Switch mode to buffer even if remote not connected
@@ -72,12 +71,7 @@ void mode_bt(void)
 
 	while(shouldrun)
 	{
-		//while(CommandProcess(CommandParsersBench,CommandParsersBenchNum));		
-		//if(CommandShouldQuit())
-			//break;
-			
 		if((c=fgetc(file_usb))!=-1)
-		//if((c=fgetc(file_pri))!=-1)
 		{
 			cmddecodestart:
 			if( (c=='1' || c=='2'|| c=='4' || c=='5'  || c=='9' || c=='C' || c=='c' || c=='R' || c=='r' || c=='E' || c=='e' || c=='X' || c=='x' || c=='?' || c=='I' || c=='i') || cmdn)
@@ -137,14 +131,7 @@ void mode_bt(void)
 								case 'C':
 								case 'c':
 									fprintf(file_usb,"<Clear event counters>\n");
-									Serial1DOR = 0;
-									Serial1NR = 0;
-									Serial1PE = 0;
-									Serial1FE = 0;
-									Serial1TXE = 0;
-									Serial1RXNE = 0;
-									Serial1EvtWithinInt = 0;
-									Serial1Int=0;
+									serial_uart_clearevents();
 									break;
 								case 'e':
 								case 'E':
@@ -153,10 +140,12 @@ void mode_bt(void)
 								case 'i':
 								case 'I':
 								{
-									char devname[64];
+									unsigned char devname[64];
 									fprintf(file_usb,"Initialising RN41\n");
 									rn41_Setup(file_usb,file_bt,devname);
-									fprintf(file_usb,"devname: '%s'\n",devname);
+									fprintf(file_usb,"Device name: '%s'\n",devname);
+									// Must reactivate buffering when disconnected
+									fbufferwhendisconnected(file_bt,1);
 									break;
 								}
 								case '?':
@@ -185,16 +174,21 @@ void mode_bt(void)
 				_delay_ms(10);
 			}
 		}
-		//else
-			//fputc('.',file_usb);
+		char r[64];
+		int nr;
+		do
+		{
+			nr = fread(r,1,64,file_bt);
+			if(nr)
+				fwrite(r,1,nr,file_usb);
+		}
+		while(nr);
+		/*
+		// Alternative using fgtec
 		while((c=fgetc(file_bt))!=-1)
 		{
 			fputc(c,file_usb);
-		}
-		//fprintf(file_usb,"%d\n",buffer_level(&SerialData1Rx));
-		
-		//_delay_ms(5);
-		//_delay_ms(1);
+		}*/
 
 	}
 	fprintf(file_pri,"bt end\n");
