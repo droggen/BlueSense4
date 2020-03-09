@@ -1004,6 +1004,14 @@ unsigned char CommandParserSleep(char *buffer,unsigned char size)
 {
 	(void) size;
 
+	fprintf(file_pri,"CommandParser Sleep\n");
+
+	if(ParseCommaGetNumParam(buffer)==0)
+	{
+		fprintf(file_pri,"Current sleep mode: %d.\n",__mode_sleep);
+		return 0;
+	}
+
 	int sleep;
 	if(ParseCommaGetInt(buffer,1,&sleep))
 		return 2;

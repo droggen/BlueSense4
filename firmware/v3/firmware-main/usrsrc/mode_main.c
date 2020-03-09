@@ -147,7 +147,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'.',CommandParserInterrupts,help_interrupts},
 	{'2',CommandParserI2CTest,help_i2c},
 	//{'f',CommandParserFatTest,help_fat},
-	{'s',CommandParserSleep,help_sleep},
+	{'p',CommandParserSleep,help_sleep},
 	{'G',CommandParserCPUReg,help_cpureg},
 
 	{'w',CommandParserWait,"w,<delay> waits for the specified delay in ms"},
