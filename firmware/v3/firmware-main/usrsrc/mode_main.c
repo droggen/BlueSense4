@@ -147,6 +147,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'.',CommandParserInterrupts,help_interrupts},
 	{'2',CommandParserI2CTest,help_i2c},
 	//{'f',CommandParserFatTest,help_fat},
+	{'P',CommandParserPeriphPower,"P,0|1: disable/enable BT&SD power"},
 	{'p',CommandParserSleep,help_sleep},
 	{'G',CommandParserCPUReg,help_cpureg},
 

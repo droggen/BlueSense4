@@ -1004,8 +1004,6 @@ unsigned char CommandParserSleep(char *buffer,unsigned char size)
 {
 	(void) size;
 
-	fprintf(file_pri,"CommandParser Sleep\n");
-
 	if(ParseCommaGetNumParam(buffer)==0)
 	{
 		fprintf(file_pri,"Current sleep mode: %d.\n",__mode_sleep);
@@ -1086,5 +1084,26 @@ unsigned char CommandParserWait(char *buffer,unsigned char size)
 	if(ParseCommaGetInt(buffer,1,&delay))
 		return 1;
 	HAL_Delay(delay);
+	return 0;
+}
+unsigned char CommandParserPeriphPower(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	int en;
+	if(ParseCommaGetInt(buffer,1,&en))
+		return 2;
+
+	if(en)
+	{
+		system_periphvcc_enable();
+		fprintf(file_pri,"Peripheral power enabled\n");
+	}
+	else
+	{
+		system_periphvcc_disable();
+#warning IO ports should be put in analog HiZ or input to avoid driving peripherals through inputs.
+		fprintf(file_pri,"Peripheral power disabled\n");
+	}
 	return 0;
 }
