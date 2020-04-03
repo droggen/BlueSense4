@@ -107,6 +107,7 @@ unsigned char CommandParserBenchmarkCPU(char *buffer,unsigned char size);
 unsigned char CommandParserModeDACTest(char *buffer,unsigned char size);
 unsigned char CommandParserWait(char *buffer,unsigned char size);
 unsigned char CommandParserPeriphPower(char *buffer,unsigned char size);
+unsigned char CommandParserRamp(char *buffer,unsigned char size);
 
 unsigned char CommandShouldQuit(void);
 void CommandChangeMode(unsigned char newmode);

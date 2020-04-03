@@ -259,7 +259,7 @@ void mode_sample_sound_setparam(unsigned char mode,unsigned char framebased, int
 	mode_sample_sound_param_mode=mode;
 	mode_sample_sound_param_framebased=framebased;
 	mode_sample_sound_param_logfile=logfile;
-	mode_sample_param_duration=duration*1000l;		// Store the duration in milliseconds
+	mode_sample_param_duration=duration;		// Store the duration in seconds
 
 	//printf("duration: %lu\n",mode_sample_motion_param.duration);
 	//printf("mode_sample_motion_setparam: %d %d %d\n",mode_sample_motion_param.mode,mode_sample_motion_param.logfile,mode_sample_motion_param.duration);

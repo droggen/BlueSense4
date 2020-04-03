@@ -46,6 +46,7 @@ unsigned char mode_sample_adc_stream(FILE *file_stream,unsigned long pktsample,u
 unsigned char mode_sample_adc_streamtext(FILE *file_stream,unsigned long pktsample,unsigned long timesample,unsigned numchannels,unsigned short *data);
 unsigned char mode_sample_adc_streambin(FILE *file_stream,unsigned long pktsample,unsigned long timesample,unsigned numchannels,unsigned short *data);
 unsigned char mode_sample_adc_streamfastbin(FILE *file_stream,unsigned numchannels,unsigned short *data);
+unsigned char mode_sample_adc_streamfastbin16(FILE *file_stream,unsigned numchannels,unsigned short *data);
 void stream_adc_status(FILE *f,unsigned char bin);
 
 #endif

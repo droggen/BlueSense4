@@ -207,7 +207,7 @@ unsigned char CommandParserADC(char *buffer,unsigned char size)
 	if(mode_sample_adc_period())
 		return 2;
 
-	mode_adc_fastbin=mode_adc_fastbin?1:0;
+	if(mode_adc_fastbin>2) mode_adc_fastbin=2;		// fastbin is 0, 1 or 2.
 	// Round period to multiple of 10uS
 	if(mode_adc_period%10)
 	{
@@ -309,7 +309,31 @@ void mode_sample_adc(void)
 		}
 		
 		// Acquire and send data if available
-		_MODE_SAMPLE_ADC_GET_AND_SEND;
+		//_MODE_SAMPLE_ADC_GET_AND_SEND;
+		{
+			unsigned numchannels;
+			unsigned long pktsample,timesample;
+			if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
+			{
+				switch(mode_adc_fastbin)
+				{
+					case 1:
+						putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
+						break;
+					case 2:
+						putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);
+						break;
+					case 0:
+					default:
+						putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);
+				}
+				if(putbufrv)
+					stat_adc_samplesendfailed++;
+				else
+					stat_adc_samplesendok++;
+			}
+		}
+
 
 		// Sleep
 		_MODE_SAMPLE_SLEEP;
@@ -424,6 +448,31 @@ unsigned char mode_sample_adc_streamfastbin(FILE *file_stream,unsigned numchanne
 		buf[i] = (unsigned char)(data[i]>>4);
 	}
 	unsigned char putbufrv = fputbuf(file_stream,(char*)buf,numchannels);
+	return putbufrv;
+}
+unsigned char mode_sample_adc_streamfastbin16(FILE *file_stream,unsigned numchannels,unsigned short *data)
+{
+	// Write data in 16-bit with a single D header ("D;s..." format string), no checksum
+	// ensuring no "D" arises in the data.
+	unsigned char buf[32];
+	unsigned char header='D';
+	unsigned o=0;
+	buf[o++]=header;
+	for(int i=0;i<numchannels;i++)
+	{
+		unsigned short d = data[i];
+		unsigned short dh = d>>8;
+		unsigned short dl = d&0xff;
+		// Check for presence of 'D'"
+		if(dh==header)	// Normally dh cannot be equal to header as only lower 4 bits can be set, i.e. maximum value is 0x0F while 'D' is 0x44.
+			dh--;
+		if(dl==header)
+			dl--;
+
+		buf[o++] = (unsigned char)dh;
+		buf[o++] = (unsigned char)dl;
+	}
+	unsigned char putbufrv = fputbuf(file_stream,(char*)buf,numchannels*2+1);
 	return putbufrv;
 }
 /******************************************************************************

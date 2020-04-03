@@ -152,6 +152,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'G',CommandParserCPUReg,help_cpureg},
 
 	{'w',CommandParserWait,"w,<delay> waits for the specified delay in ms"},
+	{'9',CommandParserRamp,"9,<delay>,<from>,<lowerthan>,<step> Generates a ramp signal every delay ms starting at from by increment of step."},
 
 
 	{'k', CommandParserBenchmarkCPU,help_benchmark_cpu},
