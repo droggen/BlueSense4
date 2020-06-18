@@ -123,7 +123,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	//{'G', CommandParserMotionRecog,help_g},
 	{'W', CommandParserSwap,help_w},
 	//{'O', CommandParserOff,help_O},
-	//{'o', CommandParserOffPower,help_o},
+	{'o', CommandParserOffPower,help_o},
 	{'F', CommandParserStreamFormat,help_f},
 	{'i', CommandParserInfo,help_info},
 	{'D', CommandParserModeDAC,"D[,sr,<frq0>,<vol0>[,<frq1>,<vol1>,...]]: DAC cosine waveform generation. sr: sample rate in Hz; vol: 0 to 4096; frqn: frequency in Hz\n\t\tNo parameters stops. Maximum sample rate is about 250KHz for 1 wavefom."},
@@ -153,7 +153,9 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 	{'w',CommandParserWait,"w,<delay> waits for the specified delay in ms"},
 	{'9',CommandParserRamp,"9,<delay>,<from>,<lowerthan>,<step> Generates a ramp signal every delay ms starting at from by increment of step."},
-	{'8',CommandParserBodyTemp,"8,<delay>,<from>,<to>,<jump> Generates a random walk between from and to, jumping by up to jump every delay ms."},
+	{'8',CommandParserRandomWalk,"8,<delay>,<from>,<to>,<jump> Generates a random walk between from and to, jumping by up to jump every delay ms."},
+
+	//{'§',CommandTestPwr,"test prw stuff"},
 
 
 	{'k', CommandParserBenchmarkCPU,help_benchmark_cpu},

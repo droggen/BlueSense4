@@ -9,7 +9,7 @@
 #include <string.h>
 //#include <usart.h.not>
 #include "stm32l4xx_hal.h"
-//#include <mode.h>
+#include "mode.h"
 #include "main.h"
 //#include "gpio.h"
 #include "serial.h"

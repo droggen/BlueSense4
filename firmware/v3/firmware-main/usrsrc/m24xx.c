@@ -43,6 +43,38 @@ unsigned char m24xx_write(unsigned short addr16,unsigned char d)
 	return rv;
 #endif
 }
+/******************************************************************************
+	function: m24xx_write_buffer_nowait
+*******************************************************************************
+	Writes a buffer to the eeprom in a single write operation.
+
+	The maximum size of a buffer is limited by the I2C transaction subsystem
+	and is 16-3=13 bytes.
+
+	Writes must not cross a page boundary (32 bytes)
+
+	Interrupts:
+		Suitable for call in interrupt; does not guarantee that the transaction
+		was successfully enqueud, nor that the operation completed.
+
+
+	Parameters:
+		buffer	-		Pointer to the buffer with the data to write
+		n		-		Number of bytes to write
+
+	Returns:
+		0		-		Success
+		1		-		Error
+
+******************************************************************************/
+// Return: 0=success
+unsigned char m24xx_write_buffer_nowait(unsigned short addr16,unsigned char *buffer,unsigned char n)
+{
+	unsigned char rv = i2c_writeregs_a16_try(M24XX_ADDRESS,addr16,buffer,n);
+	// Normally a maximum write time of 5ms could occur; this fuction does not wait for the EEPROM to be ready.
+	return rv;
+}
+
 // Return: 0=success
 unsigned char m24xx_read(unsigned short addr16,unsigned char *d)
 {

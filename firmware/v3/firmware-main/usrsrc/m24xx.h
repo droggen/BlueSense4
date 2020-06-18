@@ -15,6 +15,7 @@
 unsigned char m24xx_isok();
 unsigned char m24xx_read(unsigned short addr16,unsigned char *d);
 unsigned char m24xx_write(unsigned short addr16,unsigned char d);
+unsigned char m24xx_write_buffer_nowait(unsigned short addr16,unsigned char *buffer,unsigned char n);
 void m24xx_printreg(FILE *f,unsigned from,unsigned to);
 
 #endif /* M24XX_H_ */

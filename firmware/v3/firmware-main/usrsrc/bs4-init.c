@@ -99,55 +99,20 @@ void bs4_init_extended()
 	system_settimefromrtc();
 
 
+	// -------------------------
 	// Fuel gauge initialisation
-	// Get the charge
-	// Read current data
-	_poweruse_off.oncharge = ltc2942_getcharge();
-	_poweruse_off.onvoltage = ltc2942_getvoltage();
-	_poweruse_off.ontime = timer_ms_get();
-	stmrtc_readdatetime_conv_int(0,&_poweruse_off.onh,&_poweruse_off.onm,&_poweruse_off.ons,0,&_poweruse_off.onday,&_poweruse_off.onmonth,&_poweruse_off.onyear);
-
-
-	// Read data stored during last soft-off
-	system_loadpoweroffdata2(&_poweruse_off);
-
-	// Mark the data as now invalid
+	// Get the current power data
+	// This is done before calling ltc2942_init: this is ok as (except the first boot) the ltc is always configured identically.
+	// However as ltc2942_init resets the counter to mid-range, the counter reading must occur here.
+	_poweruse_data_aton.charge = ltc2942_getcharge();
+	_poweruse_data_aton.voltage = ltc2942_getvoltage();
+	_poweruse_data_aton.time = timer_ms_get();
+	// Read power data stored during last off
+	system_loadpowerdata(&_poweruse_data_atoff);
+	// Mark the stored data as now invalid
 	eeprom_write_byte(STATUS_ADDR_OFFCURRENT_VALID,0);
 
-	// Render info
-	for(unsigned char i=0;i<5;i++)
-		_poweruse_off.str[0][0]=0;
-	sprintf(_poweruse_off.str[0],"Off power data:\n");
-	if(_poweruse_off.valid)
-	{
-		sprintf(_poweruse_off.str[1],"Power off at: %lu Q: %lu V: %u\n",_poweruse_off.offtime,_poweruse_off.offcharge,_poweruse_off.offvoltage);
-		sprintf(_poweruse_off.str[2],"Power on at: %lu Q: %lu V: %u\n",_poweruse_off.ontime,_poweruse_off.oncharge,_poweruse_off.onvoltage);
-
-		// Compute delta-T in seconds; does not work if the measurement is across one month
-		unsigned long deltams = _poweruse_off.ontime-_poweruse_off.offtime;
-
-		sprintf(_poweruse_off.str[3],"Delta T: %lu ms\n",deltams);
-
-		// Compute power
-		signed short pwr1 = ltc2942_getavgpower(_poweruse_off.offcharge,_poweruse_off.oncharge,_poweruse_off.onvoltage,deltams);
-		signed long pwr2 = ltc2942_getavgpower2(_poweruse_off.offcharge,_poweruse_off.oncharge,_poweruse_off.offvoltage,_poweruse_off.onvoltage,deltams/1000l);
-		sprintf(_poweruse_off.str[4],"pwr1: %d mW pwr2: %ld uW\n",pwr1,pwr2);
-	}
-	else
-		sprintf(_poweruse_off.str[1],"No off-power data\n");
-	// Display info
-	for(unsigned char i=0;i<5;i++)
-		fputs(_poweruse_off.str[i],file_pri);
-
-	/*fprintf(file_pri,"==At power off==\n");
-	fprintf(file_pri,"Charge: %lu\n",_poweruse_off.offcharge);
-	fprintf(file_pri,"Voltage: %u\n",_poweruse_off.offvoltage);
-	fprintf(file_pri,"Time: %lu\n",_poweruse_off.offtime);
-
-	fprintf(file_pri,"==At power on==\n");
-	fprintf(file_pri,"Charge: %lu\n",_poweruse_off.oncharge);
-	fprintf(file_pri,"Voltage: %u\n",_poweruse_off.onvoltage);
-	fprintf(file_pri,"Time: %lu\n",_poweruse_off.ontime);*/
+	power_print_off_on_info();
 
 #if 1
 	fprintf(file_pri,"Checking fuel gauge... ");

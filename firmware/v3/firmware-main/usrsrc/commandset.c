@@ -21,8 +21,8 @@
 #include "mode.h"
 #include "usrmain.h"
 #include "wait.h"
-/*#include "ds3232.h"
-#include "system.h"*/
+/*#include "ds3232.h"*/
+#include "system.h"
 #include "system-extra.h"
 #include "uiconfig.h"
 /*#include "init.h"
@@ -30,8 +30,14 @@
 #include "interface.h"*/
 #include "mode_global.h"
 #include "ltc2942.h"
+#include "eeprom-m24.h"
+#include "power.h"
+#include "serial_itm.h"
 
 //#include "ufat.h"
+
+#include "i2c/i2c_transaction.h"
+#include "i2c/stmi2c.h"
 
 #include "cmsis_gcc.h"
 
@@ -64,7 +70,7 @@ const char help_M[]  ="M[,<mode>[,<logfile>[,<duration>]]: without parameters li
 const char help_m[]  ="MPU test mode";
 const char help_g[]  ="G,<mode> enters motion recognition mode. The parameter is the sample rate/channels to acquire. Use G? to find more about modes";
 const char help_O[]  ="O[,sec] Power off and no wakeup, or wakeup after sec seconds";
-const char help_o[]  ="Display power used in off mode; if the node was turned off with O";
+const char help_o[]  ="Display power used in off mode; if the node was turned off with O or with a hard reset";
 const char help_p[]  ="Store data to measure power in off mmodepower used in off mode; if the node was turned off with O";
 const char help_coulomb[]  ="Coulomb counter test mode";
 const char help_sd[]  ="SD card test mode";
@@ -569,12 +575,7 @@ unsigned char CommandParserOff(char *buffer,unsigned char size)
 }
 unsigned char CommandParserOffPower(char *buffer,unsigned char size)
 {
-	// Power in off mode
-	/*for(unsigned char i=0;i<5;i++)
-	{
-		fputs(_poweruse_off.str[i],file_pri);
-	}
-	*/
+	power_print_off_on_info();
 	return 0;
 }
 unsigned char CommandParserOffStore(char *buffer,unsigned char size)
@@ -887,7 +888,7 @@ unsigned char CommandParserCallback(char *buffer,unsigned char size)
 unsigned char CommandParserClearBootCounter(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
-	eeprom_write_dword((uint32_t*)STATUS_ADDR_NUMBOOT0,0);
+	eeprom_write_dword(STATUS_ADDR_NUMBOOT0,0);
 	fprintf(file_pri,"Cleared\n");
 	return 0;
 }
@@ -1140,7 +1141,7 @@ unsigned char CommandParserRamp(char *buffer,unsigned char size)
 	return 0;
 }
 
-unsigned char CommandParserBodyTemp(char *buffer,unsigned char size)
+unsigned char CommandParserRandomWalk(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 	int delay,from,to,jump;
@@ -1181,3 +1182,33 @@ unsigned char CommandParserBodyTemp(char *buffer,unsigned char size)
 	return 0;
 }
 
+/*unsigned char CommandTestPwr(char *buffer,unsigned char size)
+{
+
+
+	fprintf(file_pri,"testing pwr\n");
+
+	fprintf(file_pri,"Store power\n");
+
+	system_storepowerdata();
+
+	//HAL_Delay(1000);
+	HAL_Delay(1);
+
+	// Add some additional wait
+	//while(!_i2c_transaction_idle);
+
+	fprintf(file_pri,"Read eeprom\n");
+	m24xx_printreg(file_pri,500,545);
+
+	fprintf(file_pri,"Erase cells\n");
+	for(int i=512;i<532;i++)
+		m24xx_write(i,0x7f);
+
+	fprintf(file_pri,"Read eeprom again\n");
+		m24xx_printreg(file_pri,500,545);
+
+	fprintf(file_pri,"Done\n");
+
+	return 0;
+}*/

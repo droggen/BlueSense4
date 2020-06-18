@@ -31,9 +31,10 @@ void system_adcpu_on(void);*/
 unsigned char *system_getdevicename(void);
 //unsigned char system_getrtcint(void);
 void system_settimefromrtc(void);
-/*void system_storepoweroffdata(void);
-void system_storepoweroffdata2(void);*/
-void system_loadpoweroffdata2(_POWERUSE_OFF *pu);
+/*void system_storepoweroffdata(void);*/
+/*void system_storepoweroffdata2(void);*/
+void system_storepowerdata();
+void system_loadpowerdata(_POWERUSE_DATA *pu);
 void system_buttonchange(unsigned char newpc);
 unsigned long system_perfbench_motionread(unsigned long mintime);
 unsigned long system_perfbench(unsigned long mintime);

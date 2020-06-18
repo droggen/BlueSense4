@@ -30,6 +30,7 @@ unsigned char system_lifesign(unsigned char sec);
 unsigned char system_lifesign2(unsigned char sec);
 void system_status_ok(unsigned char status);
 void system_blink_led(unsigned char n,unsigned char timeon,unsigned char timeoff,unsigned char led);
+void system_blink(unsigned char n,unsigned char delay,unsigned char init);
 unsigned system_buttonpress();
 unsigned char system_isbtconnected(void);
 unsigned char system_isusbconnected(void);

@@ -122,7 +122,24 @@ void system_settimefromrtc(void)
 	eeprom_write_byte((uint8_t*)STATUS_ADDR_OFFCURRENT_MONTH,month);
 	eeprom_write_byte((uint8_t*)STATUS_ADDR_OFFCURRENT_YEAR,year);	
 }*/
-/*void system_storepoweroffdata2(void)
+/******************************************************************************
+	function: system_storepowerdata
+*******************************************************************************
+	Store the current power/voltate/date/time to EEPROM.
+	Assumes that the data has been previously read from the fuel gauge.
+
+	This is used before powering off the system to compute the power used in off mode.
+
+	Interrupts:
+		Suitable for interrupts, but does not guarantee success of EEPROM write.
+
+	Parameters:
+		addr		-		Address where to write: typically STATUS_ADDR_OFFCURRENT_VALID or STATUS_ADDR_ONCURRENT_VALID
+
+	Returns:
+
+******************************************************************************/
+void system_storepowerdata()
 {
 	// Get voltage and charge
 	unsigned long charge = ltc2942_last_charge();	
@@ -130,24 +147,33 @@ void system_settimefromrtc(void)
 	unsigned long time = ltc2942_last_updatetime();
 	
 	// Store charge, voltage and time
-	eeprom_write_byte((uint8_t*)STATUS_ADDR_OFFCURRENT_VALID,1);
-	eeprom_write_dword((uint32_t*)STATUS_ADDR_OFFCURRENT_CHARGE0,charge);
-	eeprom_write_word((uint16_t*)STATUS_ADDR_OFFCURRENT_VOLTAGE0,voltage);
-	eeprom_write_dword((uint32_t*)STATUS_ADDR_OFFCURRENT_TIME,time);
-	
-}*/
-void system_loadpoweroffdata2(_POWERUSE_OFF *pu)
+
+	//fprintf(file_pri,"last up ti: %ld\n",time);	// debug
+
+
+	// The eeprom_write_xxx functions are not suitable for use in interrupts.
+	// Therefore use eeprom_write_buffer_try_nowait instead.
+	unsigned char buffer[13];
+	buffer[0] = 1;		// Valid
+	*(unsigned long*)(&buffer[1]) = charge;
+	*(unsigned short*)(&buffer[5]) = voltage;
+	*(unsigned long*)(&buffer[7]) = time;
+	buffer[11] = 0x55;		// Termination
+	buffer[12] = 0xAA;
+
+	unsigned char rv = eeprom_write_buffer_try_nowait(STATUS_ADDR_OFFCURRENT_VALID,buffer,13);
+
+	//eeprom_write_buffer_try_nowait(STATUS_ADDR_OFFCURRENT_VALID,"0123456789ABCD",13);
+
+}
+
+void system_loadpowerdata(_POWERUSE_DATA *pu)
 {
 	// Load charge, voltage and time
-	/*pu->valid = eeprom_read_byte((uint8_t*)STATUS_ADDR_OFFCURRENT_VALID);
-	pu->offcharge = eeprom_read_dword((uint32_t*)STATUS_ADDR_OFFCURRENT_CHARGE0);
-	pu->offvoltage = eeprom_read_word((uint16_t*)STATUS_ADDR_OFFCURRENT_VOLTAGE0);
-	pu->offtime = eeprom_read_dword((uint32_t*)STATUS_ADDR_OFFCURRENT_TIME);*/
-
 	pu->valid = eeprom_read_byte(STATUS_ADDR_OFFCURRENT_VALID,1,0);
-	pu->offcharge = eeprom_read_dword(STATUS_ADDR_OFFCURRENT_CHARGE0,1,0);
-	pu->offvoltage = eeprom_read_word(STATUS_ADDR_OFFCURRENT_VOLTAGE0,1,0);
-	pu->offtime = eeprom_read_dword(STATUS_ADDR_OFFCURRENT_TIME,1,0);
+	pu->charge = eeprom_read_dword(STATUS_ADDR_OFFCURRENT_CHARGE0,1,0);
+	pu->voltage = eeprom_read_word(STATUS_ADDR_OFFCURRENT_VOLTAGE0,1,0);
+	pu->time = eeprom_read_dword(STATUS_ADDR_OFFCURRENT_TIME,1,0);
 
 
 	
@@ -288,6 +314,8 @@ unsigned char system_batterystat(unsigned char unused)
 		else
 		{
 			system_led_off(0);
+
+			system_led_off(LED_GREEN);		// Power debug
 		}
 		
 		lastpc=newpc;
@@ -300,15 +328,18 @@ unsigned char system_batterystat(unsigned char unused)
 		if(pressduration==40)
 		{
 			// Issue a background read of the battery state
-			//ltc2942_backgroundgetstate(0);
+			ltc2942_backgroundgetstate(0);
 		}
-		if(pressduration==45)
+		if(pressduration==44)
 		{
 			// Store the battery info
-			//system_storepoweroffdata2();
+			system_storepowerdata(STATUS_ADDR_OFFCURRENT_VALID);
 			
+			//system_led_on(LED_GREEN);	// DEBUG: Turn on green LED once power data stored
+
 		}
-		if(pressduration>40 && pressduration<45)
+		if(pressduration>40 && pressduration<45)		// Blink if greater than 4 seconds then stay on
+		//if(pressduration>40)							// Blink forever if greater than 4 seconds
 		{
 			system_led_toggle(0b001);
 		}

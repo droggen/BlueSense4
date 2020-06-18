@@ -26,6 +26,36 @@ void eeprom_write_dword(unsigned addr,uint32_t d32)
 	m24xx_write(addr+2,d32>>16);
 	m24xx_write(addr+3,d32>>24);
 }
+/******************************************************************************
+	function: eeprom_write_buffer_try_nowait
+*******************************************************************************
+	Writes a buffer to the eeprom in a single write operation.
+
+	The maximum size of a buffer is limited by the I2C transaction subsystem
+	and is 16-3=13 bytes.
+
+	Writes must not cross a page boundary (32 bytes)
+
+	Interrupts:
+		Suitable for call from interrupts. Does not guarantee success of operation
+
+	Parameters:
+		buffer	-		Pointer to the buffer with the data to write
+		n		-		Number of bytes to write
+
+	Returns:
+		0		-		Success
+		1		-		Error
+
+******************************************************************************/
+unsigned char eeprom_write_buffer_try_nowait(unsigned addr,unsigned char *buffer, unsigned n)
+{
+	if(n>13)
+		return 1;
+
+	return m24xx_write_buffer_nowait(addr,buffer,n);
+}
+
 
 unsigned char eeprom_read_byte(unsigned addr,unsigned char checkvalid,unsigned char defval)
 {

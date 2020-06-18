@@ -190,7 +190,7 @@ unsigned char i2c_writereg(unsigned char addr7,unsigned char reg,unsigned char v
 /******************************************************************************
 	i2c_writereg_a16
 *******************************************************************************
-	General purpose write an I2C register, for most I2C devices with 16-bit register.
+	General purpose write an I2C register, for most I2C devices with 16-bit register address.
 	Operation: writes the register of interest, writes the value
 
 	Block until successful
@@ -236,7 +236,67 @@ unsigned char i2c_writereg_a16(unsigned char addr7,unsigned short reg,unsigned c
 	return 0;
 #endif
 }
+/******************************************************************************
+	function: i2c_writeregs_a16_try
+*******************************************************************************
+	General purpose write of multiple I2C register, for most I2C devices with 16-bit register address.
 
+	Operation: writes the register of interest, writes the data.
+
+	Maximum 13 bytes can be written.
+
+	This function is non-blocking and therefore must use the global I2C transaction pool.
+
+
+	Interrupts:
+		Suitable for use in interrupts. The function does not wait for the transaction to successfully
+		queue or to complete.
+
+
+	Parameters:
+		addr7	-		7-bit I2C address
+		reg		-		Starting register address for write
+		buffer	-		Pointer to the buffer with the data to write
+		n		-		Number of bytes to write
+
+	Return value:
+		0:			Success
+		nonzero:	Error
+******************************************************************************/
+unsigned char i2c_writeregs_a16_try(unsigned char addr7,unsigned short reg,unsigned char *buffer,unsigned char n)
+{
+	I2C_TRANSACTION *t1;
+
+	// Sanity check
+	if(n>13)
+		return 1;
+
+	// Attempt to allocate a transaction from the global pool; return if error
+	unsigned char rv = i2c_transaction_pool_reserve(1,&t1);
+	if(rv)
+		return 2;
+
+	// Transaction: select register, write, stop
+	i2c_transaction_setup(t1,addr7,I2C_WRITE,1,n+2);
+	t1->data[0]=reg>>8;
+	t1->data[1]=reg;
+	for(int i=0;i<n;i++)
+		t1->data[2+i]=buffer[i];
+
+	unsigned char r;
+
+	r = i2c_transaction_queue(1,0,t1);			// Queue in non-blocking manner
+	if(r)
+	{
+		fprintf(file_pri,"Queue error\n");
+		return 3;								// Error: could not enqueue
+	}
+
+	// The transaction is automatically freed by the I2C ISR state machine
+
+	// Enqued successfully
+	return 0;
+}
 
 /******************************************************************************
 	i2c_readregs
