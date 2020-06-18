@@ -1140,3 +1140,44 @@ unsigned char CommandParserRamp(char *buffer,unsigned char size)
 	return 0;
 }
 
+unsigned char CommandParserBodyTemp(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+	int delay,from,to,jump;
+	int exit=0;
+
+	//fprintf(file_pri,"Ramp\n");
+
+	if(ParseCommaGetInt(buffer,4,&delay,&from,&to,&jump))
+		return 2;
+
+	fprintf(file_pri,"Random generation: from %d to %d, jumping %d,every %dms\n",from,to,jump,delay);
+
+	HAL_Delay(100);
+
+	int v = from+(to-from)/2;
+
+	while(!exit)
+	{
+		// Update v;
+		int r = (rand()%(2*jump+1))-jump;
+		v+=r;
+		if(v<from)
+			v=from;
+		if(v>to)
+			v=to;
+
+
+		fprintf(file_pri,"%d\n",v);
+		HAL_Delay(delay);
+		if(fgetc(file_pri)!=-1)
+		{
+			exit=1;
+			break;
+		}
+
+	}
+
+	return 0;
+}
+
