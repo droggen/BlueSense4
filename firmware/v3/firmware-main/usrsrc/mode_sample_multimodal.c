@@ -200,7 +200,7 @@ void mode_sample_multimodal(void)
 	stm_adc_data_clear();
 	mpu_data_clear();
 
-	while(!CommandShouldQuit())
+	while(1)
 	{
 		// Depending on the "fastbin" mode either go through the fast "keypress" exit, or the slower command parser.
 		/*if(mode_adc_fastbin)
@@ -212,8 +212,16 @@ void mode_sample_multimodal(void)
 		else
 		{*/
 			// Process all user commands
-			while(CommandProcess(CommandParsersMultimodal,CommandParsersMultimodalNum));
+			//while(CommandProcess(CommandParsersMultimodal,CommandParsersMultimodalNum));
 		//}
+
+		// Process user commands only if we do not run for a specified duration
+		if(mode_sample_param_duration==0)
+		{
+			while(CommandProcess(CommandParsersMultimodal,CommandParsersMultimodalNum));
+			if(CommandShouldQuit())
+				break;
+		}
 
 		// Send data to primary stream or to log if available
 		FILE *file_stream;
