@@ -205,13 +205,15 @@ unsigned char CommandParserSampleSound(char *buffer,unsigned char size)
 		if(rv==0)
 		{
 			//fprintf(file_pri,"3 arg - lognum: %d\n",lognum);
+			/*
+			// Don't test if log is valid - to be consistent with motion mode
 			int availlog = ufat_log_getnumlogs();
 			// Success
 			if(lognum<0 || lognum>availlog)
 			{
 				fprintf(file_pri,"Invalid log file number. Number of log files: %d\n",availlog);
 				return 2;
-			}
+			}*/
 
 			// Check if 4 arguments
 			rv = ParseCommaGetInt((char*)buffer,4,&mode,&framebased,&lognum,&duration);

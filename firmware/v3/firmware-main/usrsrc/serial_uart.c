@@ -889,7 +889,7 @@ Test when issuing H to RN41: counter
 	321 with cts
 230K:
 	5 with rts
-RTS: output of STM32 indicating readiness to receive data. RTS prevents receive underruns.
+RTS: output of STM32 indicating readiness to receive data. RTS prevents receive overruns.
 
 */
 // Speed: 115200, etc.

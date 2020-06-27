@@ -73,8 +73,8 @@ unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size)
 	if(np==0)
 	{
 		fprintf(file_pri,"Available multimodal modes:\n");
-		fprintf(file_pri,"\t0: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-16KHz + ADC(mask)\n");
-		fprintf(file_pri,"\t1: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-16KHz\n");
+		fprintf(file_pri,"\t0: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-8KHz + ADC(mask)\n");
+		fprintf(file_pri,"\t1: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-8KHz\n");
 		fprintf(file_pri,"\t2: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + ADC(mask)\n");
 		fprintf(file_pri,"\t3: Sound-16KHz + ADC(mask)\n");
 		return 0;
@@ -182,8 +182,8 @@ void mode_sample_multimodal(void)
 	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
 	{
 		fprintf(file_pri,"MPU sampling\n");
-		//mpu_config_motionmode(MPU_MODE_225HZ_ACCGYROMAG100QUAT,1);
-		mpu_config_motionmode(MPU_MODE_102HZ_ACCGYROMAG100QUAT,1);
+		mpu_config_motionmode(MPU_MODE_225HZ_ACCGYROMAG100QUAT,1);
+		//mpu_config_motionmode(MPU_MODE_102HZ_ACCGYROMAG100QUAT,1);
 	}
 	if(mode_sample_multimodal_mode & MULTIMODAL_SND)
 	{
@@ -278,9 +278,12 @@ void mode_sample_multimodal(void)
 	system_led_off(LED_GREEN);
 
 	// Print statistics
-	stream_adc_status(file_pri,0);
-	stream_sound_status(file_pri,0);
-	stream_motion_status(file_pri,0);
+	if(mode_sample_multimodal_mode & MULTIMODAL_ADC)
+		stream_adc_status(file_pri,0);
+	if(mode_sample_multimodal_mode & MULTIMODAL_SND)
+		stream_sound_status(file_pri,0);
+	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
+		stream_motion_status(file_pri,0);
 
 
 mode_sample_multimodal_end:

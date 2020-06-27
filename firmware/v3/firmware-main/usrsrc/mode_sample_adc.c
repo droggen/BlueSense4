@@ -39,6 +39,8 @@
 
 	Status: complete.
 
+	Notes: the sample time is common for the entire DMA acquired framed, but the sample rate is highly constant
+
 	TODO: none
 
 */
@@ -377,10 +379,10 @@ unsigned char mode_sample_adc_streamtext(FILE *file_stream,unsigned long pktsamp
 		bufferptr = format1u32(bufferptr,timesample);
 	}
 	// Format ms timestamp
-	if(mode_stream_format_ts)
+	/*if(mode_stream_format_ts)
 	{
 		bufferptr = format1u32(bufferptr,timer_ms_get());
-	}
+	}*/
 	if(mode_stream_format_bat)
 	{
 		bufferptr=format1u16(bufferptr,system_getbattery());

@@ -92,7 +92,7 @@ const char help_i2c[] = "I2C tests";
 const char help_interface[]="Interface funcions (benchmark, swap, etc)";
 const char help_benchmark[]="CPU and IO benchmarks";
 const char help_fat[]="fat test";
-const char help_sleep[] = "s,<0|1> Enable (1) or disable (0) sleep while waiting user input";
+const char help_sleep[] = "p[,<0|1>] Query sleep state or enable (1) or disable (0) sleep while waiting user input";
 const char help_cpureg[] = "Print CPU registers";
 const char help_audio[] = "Audio functions";
 const char help_benchmark_cpu[] = "CPU benchmarks";
@@ -1023,7 +1023,7 @@ unsigned char CommandParserSleep(char *buffer,unsigned char size)
 		__mode_sleep=0;
 
 
-	fprintf(file_pri,"Previous sleep mode: %d. Now; %d\n",s,__mode_sleep);
+	fprintf(file_pri,"Previous sleep mode: %d. New sleep mode: %d\n",s,__mode_sleep);
 	return 0;
 }
 
