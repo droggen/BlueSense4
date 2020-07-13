@@ -351,8 +351,8 @@ unsigned char system_batterystat(unsigned char unused)
 		// If counter is zero, we initialise the blink logic.
 		// nblinks indicate the number of blinks to issue.
 		nblinks=0;
-		//unsigned short mv = ltc2942_last_mV();
-		unsigned short mv = 4200;
+		unsigned short mv = ltc2942_last_mV();
+		//unsigned short mv = 4200;
 		
 		
 		nblinks=0;

@@ -331,6 +331,7 @@ void audio_stream_format_metadata_bin(PACKET *p,unsigned long time,unsigned long
 		packet_add16_little(p,CurrentAnnotation);
 
 }
+
 int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
 {
 	// Frame version
@@ -432,6 +433,7 @@ int audio_stream_sample_bin_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms
 	}
 	return putbuferr;
 }
+
 
 
 

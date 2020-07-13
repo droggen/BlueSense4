@@ -981,4 +981,3 @@ void ltc2942_print_longbatstat(FILE *f)
 
 
 
-

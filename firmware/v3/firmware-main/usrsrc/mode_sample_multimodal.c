@@ -282,6 +282,7 @@ void mode_sample_multimodal(void)
 	// End the logging, if logging was ongoing
 	mode_sample_logend();
 
+
 	// Clear LED
 	system_led_off(LED_GREEN);
 
@@ -292,6 +293,11 @@ void mode_sample_multimodal(void)
 		stream_sound_status(file_pri,0);
 	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
 		stream_motion_status(file_pri,0);
+
+
+#ifdef MSM_LOGBAT
+	mode_sample_storebatinfo();
+#endif
 
 
 mode_sample_multimodal_end:

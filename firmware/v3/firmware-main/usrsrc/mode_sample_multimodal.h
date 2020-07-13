@@ -12,6 +12,8 @@
 #define MULTIMODAL_SND (0b010)
 #define MULTIMODAL_ADC (0b001)
 
+extern unsigned mode_sample_multimodal_mode;
+
 void mode_sample_multimodal(void);
 unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size);
 

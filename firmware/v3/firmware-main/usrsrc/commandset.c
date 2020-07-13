@@ -62,7 +62,7 @@ const char help_ttest[]  ="Time-related tests";
 const char help_d[]  ="D[,<dd><mm><yy>] Query or set date";
 const char help_quit[]  ="Exit current mode";
 const char help_h[]  ="Help";
-const char help_a[]  ="A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging mode until keypress or ! command.\n\t\thex: ADC channel bitmask in hex (bits 0 to 4=ext channel, 5=vbat, 6=vref, 7=temp)\n\t\tus: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (should be used with only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tIf logfile is specified then logs data (use -1 to force streaming).\n\t\tIf duration specified streams/log for specified number of seconds.";
+const char help_a[]  ="A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging mode until keypress or ! command.\n\t\tmask: ADC channel bitmask in hex (bits 0 to 4=ext channel, 5=vbat, 6=vref, 7=temp)\n\t\tperiod: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (should be used with only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tIf logfile is specified then logs data (use -1 to force streaming).\n\t\tIf duration specified streams/log for specified number of seconds.";
 const char help_a_test[]  ="ADC test";
 const char help_s[]  ="S,<us>: test streaming/logging mode; us: sample period in microseconds";
 const char help_f[]  ="F,<bin>,<pktctr>,<ts>,<bat>,<label>: bin: 1 for binary, 0 for text; for others: 1 to stream, 0 otherwise";

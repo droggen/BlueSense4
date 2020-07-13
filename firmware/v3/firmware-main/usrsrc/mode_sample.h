@@ -1,7 +1,7 @@
 #ifndef __MODE_SAMPLE_H
 #define __MODE_SAMPLE_H
 
-#define MODE_SAMPLE_INFOEVERY_MS	2000
+#define MODE_SAMPLE_INFOEVERY_MS	30000
 
 
 /* Check whether duration of recording overrun to stop streaming/logging

@@ -371,7 +371,7 @@ unsigned char mode_sample_adc_streamtext(FILE *file_stream,unsigned long pktsamp
 	char *bufferptr=buffer;
 	if(mode_stream_format_pktctr)
 	{
-		bufferptr=format1u16(bufferptr,pktsample);
+		bufferptr=format1u32(bufferptr,pktsample);
 	}
 	// Format us timestamp
 	if(mode_stream_format_ts)
@@ -417,7 +417,7 @@ unsigned char mode_sample_adc_streambin(FILE *file_stream,unsigned long pktsampl
 	packet_reset(&adcpacket);
 	if(mode_stream_format_pktctr)
 	{
-		packet_add16_little(&adcpacket,pktsample);
+		packet_add32_little(&adcpacket,pktsample);
 	}
 	if(mode_stream_format_ts)
 	{

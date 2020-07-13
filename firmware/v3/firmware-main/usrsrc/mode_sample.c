@@ -34,7 +34,8 @@
 #include "mode_sample_motion.h"
 #include "mode_sample_adc.h"
 #include "mode_sample_sound.h"
-
+#include "mode_sample_multimodal.h"
+#include "ltc2942.h"
 
 unsigned long stat_timems_start,stat_t_cur,stat_wakeup,stat_time_laststatus;
 unsigned long int time_lastblink;
@@ -232,16 +233,13 @@ void mode_sample_storebatinfo(void)
 			ltc2942_print_longbatstat(mode_sample_file_log);
 			fprintf(mode_sample_file_log,"Battery log end\n");
 
-			// Add statistics
-			stream_motion_status(mode_sample_file_log,0);
-			mpu_printstat(mode_sample_file_log);
-			fprintf(mode_sample_file_log,"MPU Geometry time: %lu us\n",mpu_compute_geometry_time());
-
-			unsigned long cnt_sample_errbusy, cnt_sample_errfull,toterr;
-			mpu_getstat(0, 0, 0, &cnt_sample_errbusy, &cnt_sample_errfull);
-			unsigned long stat_totsample = mpu_stat_totframes();
-			toterr = stat_mpu_samplesendfailed+cnt_sample_errfull+cnt_sample_errbusy;
-			fprintf(file_pri,"Total errors: %lu/%lu samples (%lu ppm). Err stream/log: %lu, err MPU busy: %lu, err buffer full: %lu\n",toterr,stat_totsample,toterr*1000000l/stat_totsample,stat_mpu_samplesendfailed,cnt_sample_errbusy,cnt_sample_errfull);
+			// Print statistics
+			if(mode_sample_multimodal_mode & MULTIMODAL_ADC)
+				stream_adc_status(mode_sample_file_log,0);
+			if(mode_sample_multimodal_mode & MULTIMODAL_SND)
+				stream_sound_status(mode_sample_file_log,0);
+			if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
+				stream_motion_status(mode_sample_file_log,0);
 
 			mode_sample_file_log=0;
 			ufat_log_close();
