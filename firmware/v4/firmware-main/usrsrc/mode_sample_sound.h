@@ -20,7 +20,7 @@ Relies on:
 */
 #define _MODE_SAMPLE_SOUND_GET_AND_SEND		{	\
 												unsigned maxctr=0;	\
-												while(!stm_dfsdm_data_getnext(audbuf,&audbufms,&audbufpkt) && (maxctr++<100))	\
+												while(!stm_dfsdm_data_getnext(audbuf,&audbufms,&audbufpkt,&audleftright) && (maxctr++<100))	\
 												{	\
 													putbufrv = audio_stream_sample(audbuf,audbufms,audbufpkt,file_stream);	\
 													if(putbufrv)	\

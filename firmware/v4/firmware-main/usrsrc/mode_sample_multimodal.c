@@ -140,6 +140,7 @@ void mode_sample_multimodal(void)
 	unsigned short data[STM_ADC_MAXCHANNEL];		// Buffer to hold a copy of ADC data
 	STM_DFSMD_TYPE audbuf[STM_DFSMD_BUFFER_SIZE];	// Buffer for audio data
 	unsigned long audbufms,audbufpkt;				// Audio metadata
+	unsigned char audleftright;						// Audio metadata: left or right mic
 
 	//unsigned long stat_timems_end=0;
 	int putbufrv;
@@ -190,7 +191,7 @@ void mode_sample_multimodal(void)
 		fprintf(file_pri,"SND sampling\n");
 		// Set audio mode
 		//stm_dfsdm_init(STM_DFSMD_INIT_16K);
-		stm_dfsdm_init(STM_DFSMD_INIT_8K);
+		stm_dfsdm_init(STM_DFSMD_INIT_8K,STM_DFSDM_LEFT);
 	}
 
 
@@ -277,7 +278,7 @@ void mode_sample_multimodal(void)
 	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
 		mpu_config_motionmode(MPU_MODE_OFF,0);
 	if(mode_sample_multimodal_mode & MULTIMODAL_SND)
-		stm_dfsdm_init(STM_DFSMD_INIT_OFF);
+		stm_dfsdm_init(STM_DFSMD_INIT_OFF,0);
 
 	// End the logging, if logging was ongoing
 	mode_sample_logend();
@@ -303,3 +304,4 @@ void mode_sample_multimodal(void)
 mode_sample_multimodal_end:
 	fprintf(file_pri,"<SMPMULTIMODAL\n");
 }
+

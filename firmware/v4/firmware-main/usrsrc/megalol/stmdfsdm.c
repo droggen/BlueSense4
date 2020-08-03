@@ -1,29 +1,113 @@
 #include <stdio.h>
 #include <string.h>
-#include "dfsdm.h"
+#include <assert.h>
 #include "wait.h"
 #include "atomicop.h"
 #include "stmdfsdm.h"
 #include "global.h"
+
+/*
+	File: mpu
+
+	MPU9250 functions
+
+	The key functions are:
+
+	* mpu_init:					initialise the mpu
+	* mpu_config_motionmode:	selects the acquisition mode (which sensors are acquired and the sample rate) and whether "automatic read" into a memory buffer is performed.
+	* mpu_get_a:				blocking read of acceleration when not in automatic read (can also be used in automatic read).
+	* mpu_get_g:				blocking read of gyroscope when not in automatic read (can also be used in automatic read).
+	* mpu_get_agt:				blocking read of acceleration, gyroscope and temperature when not in automatic read (can also be used in automatic read).
+	* mpu_get_agmt:				blocking read of acceleration, acceleration, magnetic field and temperature when not in automatic read (can also be used in automatic read).
+	*/
+
+/******************************************************************************
+	file: stmdfsdm
+*******************************************************************************
+
+
+	*Hardware characteristics: Internal microphone*
+
+	* Internal microphone on DFSDM1-DATIN6
+	* DATIN6 is decoded by channel 6 and channel 6-1=5
+ 	* Channel 5: rising edge			Decoded by: filter 0		Microphone with LR=0			Location: Next to power input		Selected with: STM_DFSMD_LEFT
+	* Channel 6: falling edge			Decoded by: filter 1		Microphone with LR=VCC			Location: Next to push button		Selected with: STM_DFSMD_RIGHT
+
+
+	*Development information*
+
+	In STM32CubeMX the following must be set:
+	* Two DMA channels called DFSDM1_FLT0 (DM1 Channel 4) and DFSDM1_FLT1 (DM1 Channel 5) set up as: Peripheral to Memory; Circular; Increment address memory only; Peripheral is word; Memory is word
+	* Channel 5: SPI with rising;  Internal SPI; Offset=0; Bit shift=0; Analog watchdog: fastsinc oversampling 1 (LEFT microphone)
+	* Channel 6: SPI with falling; Internal SPI; Offset=0; Bit shift=0; Analog watchdog: fastsinc oversampling 1 (RIGHT microphone)
+	* Filter 0: Regular channel 5; Continuous mode; Software trigger; Fast disabled; DMA enabled; All injected disabled; Filter sinc3 fosr=70, iosr=1 (LEFT microphone)
+	* Filter 1: Regular channel 6; Continuous mode; Software trigger; Fast disabled; DMA enabled; All injected disabled; Filter sinc3 fosr=70, iosr=1 (RIGHT microphone)
+
+	DFSDM internal right shift applied first; then offset is applied.
+
+	Microphone performs best at higher end of frequency range. Currently 20MHz/6=3.33MHz (2.5% above documented spec)
+
+	* Main functions*
+
+
+	Data acquisition
+		stm_dfsdm_init			-	Primary function to start or stop data acquisition. Data acquisition is done via DMA and accessed
+
+	Statistics
+	* stm_dfsdm_clearstat
+    * stm_dfsdm_stat_totframes
+    * stm_dfsdm_stat_lostframes
+    * stm_dfsdm_data_printstat
+
+
+
+
+
+TODO:
+1. Select left or right microphone
+1.1 Parameter in init to select microphone
+1.2 No change in buffering or streaming
+1.3 Off parameter will turn off
+
+2. Select both microphone
+
+3. Instead of software rightshift use hardware right shift
+
+
+DFSDM_Channel_InitTypeDef.RightBitShift: DFSDM channel right bit shift. This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x1F
+Configure the output clock, input, serial interface, analog watchdog, offset and data right bit shift parameters for this channel using the HAL_DFSDM_ChannelInit() function.
+
+
+
+
+******************************************************************************/
+
 
 unsigned char _stm_dfsmd_buffer_rdptr,_stm_dfsmd_buffer_wrptr;
 
 STM_DFSMD_TYPE _stm_dfsmd_buffers[STM_DFSMD_BUFFER_NUM][STM_DFSMD_BUFFER_SIZE];	// Audio buffer
 unsigned long _stm_dfsmd_buffers_time[STM_DFSMD_BUFFER_NUM];					// Audio buffer acquisition time
 unsigned long _stm_dfsmd_buffers_pktnum[STM_DFSMD_BUFFER_NUM];					// Audio buffer packet counter
-unsigned long _stm_dfsmd_ctr_acq,_stm_dfsmd_ctr_loss;							// DMA acquisition statistics
-int _stm_dfsdm_dmabuf[STM_DFSMD_BUFFER_SIZE*2];									// Internal DMA audio buffer, tTwice size for copy on half full and full
+unsigned char _stm_dfsmd_buffers_leftright[STM_DFSMD_BUFFER_NUM];				// Audio buffer left_right indication
+unsigned long _stm_dfsmd_ctr_acq[2],_stm_dfsmd_ctr_loss;						// DMA acquisition statistics; the acquisition counter contains independently the left/right channels
+int _stm_dfsdm_dmabuf[STM_DFSMD_BUFFER_SIZE*2];									// Internal DMA audio buffer, twice size for copy on half full and full
+int _stm_dfsdm_dmabuf2[STM_DFSMD_BUFFER_SIZE*2];								// Internal DMA audio buffer, twice size for copy on half full and full
 unsigned int _stm_dfsdm_rightshift;												// Number of bits to right shift to obtain a 16-bit signal
 
+
+// filters[0] and channels[0] are STM_DFSMD_LEFT
+// filters[1] and channels[1] are STM_DFSMD_RIGHT
+DFSDM_Filter_HandleTypeDef *_stm_dfsdm_filters[2] = {&hdfsdm1_filter0,&hdfsdm1_filter1};
+DFSDM_Channel_HandleTypeDef *_stm_dfsdm_channels[2] = {&hdfsdm1_channel5,&hdfsdm1_channel6};
 
 const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 {
 	// Off
     "Sound off",
-	"8 KHz",
-	"16 KHz",
-	"20 KHz (poor quality)",
-	"24 KHz (poor quality)",
+	"8 KHz (8003Hz)",
+	"16 KHz (16181Hz)",
+	"20 KHz (20080Hz)",
+	"24 KHz (poor quality; overrun in stereo)",
 	/*"32 KHz",
 	"48 KHz",*/
 };
@@ -31,7 +115,12 @@ const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 /******************************************************************************
 	function: stm_dfsdm_init
 *******************************************************************************
-	Initialises the system.
+	Primary function to initialise and start, or stop, audio data acquisition by DMA.
+
+	Starts or stops the audio data acquisition with DMA at the specified sample
+	rate and with the specified left/right/stereo channels.
+
+	Acquisition statistics are cleared when starting.
 
 	Assume 20MHz system clock
 
@@ -39,58 +128,158 @@ const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 	divider = fosr*(iosr-1+ford)+(ford+1)
 
 	Parameters:
-		mode	-	STM_DFSMD_INIT_16K or STM_DFSMD_INIT_8K
+		mode		-	STM_DFSMD_INIT_OFF, STM_DFSMD_INIT_8K, STM_DFSMD_INIT_16K, ...
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT, STM_DFSMD_STEREO. This parameter is unused if mode is STM_DFSMD_INIT_OFF.
 
 	Returns:
 
 ******************************************************************************/
-void stm_dfsdm_init(unsigned mode)
+void stm_dfsdm_init(unsigned mode,unsigned char left_right)
 {
 	HAL_StatusTypeDef s;
 
-	// Stop all what could be running
-	s = HAL_DFSDM_FilterRegularStop_DMA(&hdfsdm1_filter0);
-	s = HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter0);
+	fprintf(file_pri,"Audio initialisation. Memory used: %u bytes\n",stm_dfsdm_memoryused());
 
+	/*fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_time));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_pktnum));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf2));*/
+
+
+
+	/*for(int i=0;i<2;i++)
+	{
+		fprintf(file_pri,"Filter %d: %p\n",i,_stm_dfsdm_filters[i]);
+		fprintf(file_pri,"Channel %d: %p\n",i,_stm_dfsdm_channels[i]);
+	}
+	fprintf(file_pri,"Filter %p %p\n",&hdfsdm1_filter0,&hdfsdm1_filter1);
+	fprintf(file_pri,"Channel %p %p\n",&hdfsdm1_channel5,&hdfsdm1_channel6);*/
+
+
+	//stm_dfsdm_state_print();
+
+	// Stop all what could be running on filters 0 and 1 - polling or DMA
+	stm_dfsdm_acquire_stop_all();
+
+	// Initialise the filters for the predefined settings
+	_stm_dfsdm_init_predef(mode,left_right);
+	// If "off" mode, do not continue.
+	if(mode==STM_DFSMD_INIT_OFF)
+		return;
+
+	//fprintf(file_pri,"Predefined initialisation done\n");
+
+	//stm_dfsdm_state_print();
+
+	// Calibration procedure to cancel offset
+	// Start acquisition for polling
+	stm_dfsdm_acquire_start_poll(left_right);		// This starts the left/right/stereo as appropriate
+
+	//HAL_Delay(100); fprintf(file_pri,"After start poll\n");
+	//stm_dfsdm_state_print();
+
+
+
+	// Measure offset and print
+	_stm_dfsdm_offset_calibrate(left_right,1);
+
+	// Stop polling sampling
+	stm_dfsdm_acquire_stop_poll();
+
+	// Reset sampling buffers and statistics before starting
+	stm_dfsdm_data_clear();
+
+	// Start sampling
+	stm_dfsdm_acquire_start_dma(left_right);
+
+
+	(void) s;
+}
+
+
+
+void _stm_dfsdm_init_predef(unsigned mode,unsigned char left_right)
+{
 	// Set acquisition mode
-	fprintf(file_pri,"Internal microphone: ");
+	fprintf(file_pri,"\tInternal microphone: ");
+	switch(left_right)
+	{
+		case STM_DFSDM_LEFT:
+			fprintf(file_pri,"left ");
+			break;
+		case STM_DFSDM_RIGHT:
+			fprintf(file_pri,"right ");
+			break;
+		case STM_DFSDM_STEREO:
+		default:
+			fprintf(file_pri,"stereo ");
+			break;
+	}
 	switch(mode)
 	{
 	case STM_DFSMD_INIT_OFF:
 		// Nothing to be done to turn off
 #warning Power optimisation: turn off clocks
-		fprintf(file_pri,"Off\n");
+		fprintf(file_pri,"off\n");
 		return;
 		break;
 
 	case STM_DFSMD_INIT_16K:	// OK quality
-		stm_dfsdm_initsampling(5,30,1,8);				// 16026 Hz
+		fprintf(file_pri,"16KHz\n");
+#if 0
+		stm_dfsdm_initsampling(left_right,5,30,1,8);				// 16026 Hz
 
 		// Range of signal: 30^5 = 24300000
-		_stm_dfsdm_rightshift = 10;						// 24300000/2^10 = 23730
+		//_stm_dfsdm_rightshift = 10;						// 24300000/2^10 = 23730
 
 		// Experimentally with righshift 10 max range is +/- 3400 -> multiply by 4
-		_stm_dfsdm_rightshift-=2;
+		//_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"16KHz\n");
+		// Experimentally, rightshift of 7, 8 clips when extremely close to mic
+		// Ok with rightshift 9. (8 could be used to increase sensitivity if no loud sound in environment)
+		_stm_dfsdm_rightshift=9;
+#endif
+#if 1
+		// Higher quality with divider 6
+		stm_dfsdm_initsampling(left_right,5,40,1,6);				// 16181 Hz
+
+		// Clipping with rightshift: 7, 8, 9
+		// Ok with rightshift: 10
+		_stm_dfsdm_rightshift=10;
+#endif
+
+
 		break;
 
 
 
 	case STM_DFSMD_INIT_20K:
-		stm_dfsdm_initsampling(5,21,1,9);				// ??
+		fprintf(file_pri,"20KHz\n");
+#if 0
+		stm_dfsdm_initsampling(left_right,5,21,1,9);				// 20020 Hz with clock at 2.22MHz
 
 		// Range of signal: 21^5=4084101
-		_stm_dfsdm_rightshift = 7;						// 4084101/2^7 = 31907
+		//_stm_dfsdm_rightshift = 7;						// 4084101/2^7 = 31907
 
 		// Experimentally with righshift ? max range is +/- ? -> multiply by 4
-		_stm_dfsdm_rightshift-=2;
+		//_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"20KHz\n");
+		// Experimentally with right shift of 5 there is clipping (4 heavy clipping) with 800Hz ref tone. Minimum rightshift is 6.
+		_stm_dfsdm_rightshift=6;
+#endif
+#if 1
+		stm_dfsdm_initsampling(left_right,5,32,1,6);				// 20080 Hz with clock at 3.33MHz
+		// Experimentally, higher quality than with divider of 9, although beyond microphone spec.
+		// Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
+		_stm_dfsdm_rightshift=8;
+#endif
+
 		break;
 
 	case STM_DFSMD_INIT_24K:
-		stm_dfsdm_initsampling(4,22,1,9);				// 23894
+		fprintf(file_pri,"24KHz\n");
+		stm_dfsdm_initsampling(left_right,4,22,1,9);				// 23894
 
 		// Range of signal: 22^4=234256
 		_stm_dfsdm_rightshift = 3;						// 234256/2^3 = 29282
@@ -98,14 +287,15 @@ void stm_dfsdm_init(unsigned mode)
 		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
 		_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"24KHz\n");
+
 		break;
 
 
 
 	case STM_DFSMD_INIT_32K:
+		fprintf(file_pri,"32KHz\n");
 		//stm_dfsdm_initsampling(5,17,1,7);				// 31397
-		stm_dfsdm_initsampling(3,22,1,9);				// 31397
+		stm_dfsdm_initsampling(left_right,3,22,1,9);				// 31397
 		//stm_dfsdm_initsampling(5,13,1,9);				// 31298			Noisy
 		//stm_dfsdm_initsampling(5,20,1,6);				// ?				Noisy
 
@@ -117,11 +307,12 @@ void stm_dfsdm_init(unsigned mode)
 		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
 		//_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"32KHz\n");
+
 		break;
 
 	case STM_DFSMD_INIT_48K:
-		stm_dfsdm_initsampling(5,8,1,9);				// 48309
+		fprintf(file_pri,"48KHz\n");
+		stm_dfsdm_initsampling(left_right,5,8,1,9);				// 48309
 
 		// Range of signal: 8^5=32768
 		_stm_dfsdm_rightshift = 0;						//
@@ -130,43 +321,213 @@ void stm_dfsdm_init(unsigned mode)
 		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
 		//_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"48KHz\n");
+
 		break;
 
 
 
 	case STM_DFSMD_INIT_8K:		// OK
 	default:
-		stm_dfsdm_initsampling(3,82,1,10);				// 8000 Hz
+		fprintf(file_pri,"8KHz\n");
+#if 0
+		stm_dfsdm_initsampling(left_right,3,82,1,10);				// 8000 Hz
 
 		// Range of signal: 82^3 = 551368
-		_stm_dfsdm_rightshift = 5;						// 551368/2^5 = 17230
+		//_stm_dfsdm_rightshift = 5;						// 551368/2^5 = 17230
 
 		// Experimentally with righshift 5 max range is +/- 2600 -> multiply by 4
-		_stm_dfsdm_rightshift-=2;
+		//_stm_dfsdm_rightshift-=2;
 
-		fprintf(file_pri,"8KHz\n");
+		// With rightshift of 3 and loud 800Hz (max ampl) beep sound very close to mic: +15000-8000.
+		// With rightshift of 2: clipping.
+		// Experimentally 3 is the lowest suitable shift.
+		_stm_dfsdm_rightshift=3;
+#endif
+#if 0
+		stm_dfsdm_initsampling(left_right,5,82,1,6);				// 8012 Hz
+
+		// Inaudible: rightshift 3
+		// Clipping rightshift: 9, 12, 14, 15
+		// OK rightshift: 16
+		_stm_dfsdm_rightshift=16;
+#endif
+#if 1
+		stm_dfsdm_initsampling(left_right,4,88,1,7);				// 8003 Hz
+		//_stm_dfsdm_rightshift=16; // max ampl 400
+		// Clipping rightshift: 10
+		// OK rightshift: 11
+		_stm_dfsdm_rightshift=11;
+#endif
 	}
-	// Start acquisition for polling
-	HAL_DFSDM_FilterRegularStart(&hdfsdm1_filter0);
-	// Reset offset
-	s = HAL_DFSDM_ChannelModifyOffset(&hdfsdm1_channel5,0);
-	// Calibrate
-	int offset = stm_dfsdm_calib_zero_internal();
-	s = HAL_DFSDM_ChannelModifyOffset(&hdfsdm1_channel5,offset);
-	fprintf(file_pri,"\tUncalibrated offset %d... ",offset);
-	offset = stm_dfsdm_calib_zero_internal();
-	fprintf(file_pri,"After calibration: %d\n",offset);
-	// Stop acquisition for polling
-	HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter0);
 
-	// Start sampling
-	stm_dfsdm_acquirdmaeon();
+	// Set the hardware right shift
+	stm_dfsdm_rightshift_set(left_right,_stm_dfsdm_rightshift);
 
-	// Reset sampling buffers and statistics
-	stm_dfsdm_data_clear();
+}
+/******************************************************************************
+	function: stm_dfsdm_acquire_start_poll
+*******************************************************************************
+	Start the data acquisition by polling.
 
+	The initialisation function must be called beforehand.
+
+	TODO: add which is the initialisation function
+
+
+	Parameters:
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT, STM_DFSMD_STEREO
+
+	Returns:
+
+******************************************************************************/
+void stm_dfsdm_acquire_start_poll(unsigned char left_right)
+{
+	//fprintf(file_pri,"stm_dfsdm_acquire_start_poll %d\n",left_right);
+
+	HAL_StatusTypeDef s;
+	assert(left_right<3);
+	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+	{
+		//fprintf(file_pri,"Starting left ");
+		s=HAL_DFSDM_FilterRegularStart(_stm_dfsdm_filters[0]);
+		//fprintf(file_pri,"%d\n",s);
+		if(s!=HAL_OK)
+			fprintf(file_pri,"Error starting polling left (%d)\n",s);
+	}
+	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+	{
+		//fprintf(file_pri,"Starting right ");
+		s=HAL_DFSDM_FilterRegularStart(_stm_dfsdm_filters[1]);
+		//fprintf(file_pri,"%d\n",s);
+		if(s!=HAL_OK)
+			fprintf(file_pri,"Error starting polling right (%d)\n",s);
+	}
 	(void) s;
+}
+/******************************************************************************
+	function: stm_dfsdm_offset_set
+*******************************************************************************
+	Set the offset.
+
+
+	Parameters:
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT or STM_DFSDM_STEREO. In stereo mode, both channels are set the same offset. To set individual channel offsets, call this function twice for left and right.
+		offset		-	Offset (the negative of that will be added to the signal).
+
+	Returns:
+
+******************************************************************************/
+void stm_dfsdm_offset_set(unsigned char left_right,int offset)
+{
+	HAL_StatusTypeDef s;
+	assert(left_right<3);
+	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+	{
+		s = HAL_DFSDM_ChannelModifyOffset(_stm_dfsdm_channels[STM_DFSDM_LEFT],offset);
+		if(s!=HAL_OK)
+			fprintf(file_pri,"Error setting left offset\n");
+	}
+	if(left_right==STM_DFSDM_RIGHT|| left_right==STM_DFSDM_STEREO)
+	{
+		s = HAL_DFSDM_ChannelModifyOffset(_stm_dfsdm_channels[STM_DFSDM_RIGHT],offset);
+		if(s!=HAL_OK)
+			fprintf(file_pri,"Error setting right offset\n");
+	}
+}
+/******************************************************************************
+	function: stm_dfsdm_rightshift_set
+*******************************************************************************
+	Set the right bit shift.
+
+	HAL does not provide a function for this: it must be done in the call to HAL_DFSDM_ChannelInit.
+
+	HAL documentation states:
+	DFSDM_Channel_InitTypeDef.RightBitShift: DFSDM channel right bit shift. This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x1F
+	Configure the output clock, input, serial interface, analog watchdog, offset and data right bit shift parameters for this channel using the HAL_DFSDM_ChannelInit() function.
+
+	DFSDM_CHyCFGR2: channel y configuration register
+	Bits 7:3 DTRBS[4:0]: Data right bit-shift for channel y
+		0-31: Defines the shift of the data result coming from the integrator - how many bit shifts to the right
+		will be performed to have final results. Bit-shift is performed before offset correction. The data shift is
+		rounding the result to nearest integer value. The sign of shifted result is maintained (to have valid
+		24-bit signed format of result data).
+		This value can be modified only when CHEN=0 (in DFSDM_CHyCFGR1 register).
+
+
+	Parameters:
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT or STM_DFSDM_STEREO. In stereo mode, both channels are set the same offset. To set individual channel offsets, call this function twice for left and right.
+		shift		-	shift
+
+	Returns:
+
+******************************************************************************/
+void stm_dfsdm_rightshift_set(unsigned char left_right,int shift)
+{
+	assert(left_right<3);
+
+	unsigned r;
+	// Sanity on shift: 5 bits only
+	shift&=0b11111;
+
+	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+	{
+		// Left is channel 5
+		// Must disable channel to change shift
+		r = DFSDM1_Channel5->CHCFGR1;
+		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		r&=~(0b10000000);
+		DFSDM1_Channel5->CHCFGR1=r;
+		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
+
+		//unsigned r = DFSDM_CH5CFGR2;
+		r = DFSDM1_Channel5->CHCFGR2;
+		// Preserve offset
+		r&=0xffffff00;
+		// Insert shift
+		r|=shift<<3;
+		// Update reg
+		DFSDM1_Channel5->CHCFGR2 = r;
+		char * s = dfsdm_chcfgr2(r);
+		fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
+		s = dfsdm_chcfgr2(DFSDM1_Channel5->CHCFGR2);
+		fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel5->CHCFGR2,s);
+
+		// Reactivate channel
+		r = DFSDM1_Channel5->CHCFGR1;
+		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		r|=0b10000000;
+		DFSDM1_Channel5->CHCFGR1=r;
+		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
+	}
+	if(left_right==STM_DFSDM_RIGHT|| left_right==STM_DFSDM_STEREO)
+	{
+		// Left is channel 6
+		// Must disable channel to change shift
+		r = DFSDM1_Channel6->CHCFGR1;
+		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		r&=~(0b10000000);
+		DFSDM1_Channel6->CHCFGR1=r;
+		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
+
+		r = DFSDM1_Channel6->CHCFGR2;
+		// Preserve offset
+		r&=0xffffff00;
+		// Insert shift
+		r|=shift<<3;
+		// Update reg
+		DFSDM1_Channel6->CHCFGR2 = r;
+		char * s = dfsdm_chcfgr2(r);
+		fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
+		s = dfsdm_chcfgr2(DFSDM1_Channel6->CHCFGR2);
+		fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel6->CHCFGR2,s);
+
+		// Reactivate channel
+		r = DFSDM1_Channel6->CHCFGR1;
+		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		r|=0b10000000;
+		DFSDM1_Channel6->CHCFGR1=r;
+		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
+	}
 }
 /******************************************************************************
 	function: stm_dfsdm_initsampling
@@ -184,28 +545,92 @@ void stm_dfsdm_init(unsigned mode)
 
 
 	Parameters:
-		order	-	Value from 1 to 5 inclusive specifying the sinc filter order
-		fosr	-	filter oversample ration (downsampling)
-		divider	-	sysclk divider which generates the microphone clock
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT or STM_DFSMD_STEREO
+		order		-	Value from 1 to 5 inclusive specifying the sinc filter order
+		fosr		-	filter oversample ration (downsampling)
+		div			-	sysclk divider which generates the microphone clock
 
 	Returns:
 
 ******************************************************************************/
-void stm_dfsdm_initsampling(unsigned order,unsigned fosr,unsigned iosr,unsigned div)
+void stm_dfsdm_initsampling(unsigned char left_right,unsigned order,unsigned fosr,unsigned iosr,unsigned div)
 {
 	HAL_StatusTypeDef s;
-	//fprintf(file_pri,"Audio sampling with filter order %d, oversampling %d and clock divider %d\n",order,fosr,div);
+
+	fprintf(file_pri,"\tFilter order %d; oversampling ratio: %d; integral oversampling: %d; system clock divider: %d\n",order,fosr,iosr,div);
+
+	fprintf(file_pri,"====================BEFORE OFF====================\n");
+	stm_dfsdm_printreg();
+
+
 	// Stop continuous conversion
-	s = HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_5,DFSDM_CONTINUOUS_CONV_OFF);
-	/*if(s != HAL_OK)
+	s = HAL_DFSDM_FilterConfigRegChannel(_stm_dfsdm_filters[0], DFSDM_CHANNEL_5, DFSDM_CONTINUOUS_CONV_OFF);
+	if(s != HAL_OK)
 	{
-		fprintf(file_pri,"Error stopping regular conversion %d\n",s);
-	}*/
+		fprintf(file_pri,"Error stopping regular conversion left. %d\n",s);
+	}
+	s = HAL_DFSDM_FilterConfigRegChannel(_stm_dfsdm_filters[1], DFSDM_CHANNEL_6, DFSDM_CONTINUOUS_CONV_OFF);
+	if(s != HAL_OK)
+	{
+		fprintf(file_pri,"Error stopping regular conversion right. %d\n",s);
+	}
+
+	fprintf(file_pri,"====================AFTER OFF====================\n");
+	stm_dfsdm_printreg();
+
+	// Initialise the left or right
+	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+	{
+		_stm_dfsdm_initsampling_internal(STM_DFSDM_LEFT,order,fosr,iosr,div);
+	}
+	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+	{
+		_stm_dfsdm_initsampling_internal(STM_DFSDM_RIGHT,order,fosr,iosr,div);
+	}
+
+
+	fprintf(file_pri,"====================AFTER INIT====================\n");
+	stm_dfsdm_printreg();
+
+
+
+
+
+}
+/******************************************************************************
+	function: _stm_dfsdm_initsampling_internal
+*******************************************************************************
+	Set the parameter for the channel - handles only left or right channel.
+	Must be called twice for stereo
+
+	Parameters:
+
+	Returns:
+
+******************************************************************************/
+void _stm_dfsdm_initsampling_internal(unsigned char left_right,unsigned order,unsigned fosr,unsigned iosr,unsigned div)
+{
+	HAL_StatusTypeDef s;
+
+	assert(left_right<2);
+	//fprintf(file_pri,"_stm_dfsdm_initsampling_internal: filter order %d, oversampling %d and clock divider %d\n",order,fosr,div);
+
+
+	// Print registers
+
+
+
+	DFSDM_Filter_HandleTypeDef *filter = _stm_dfsdm_filters[left_right];
+	uint32_t channel;
+	if(left_right==STM_DFSDM_LEFT)
+		channel = DFSDM_CHANNEL_5;
+	if(left_right==STM_DFSDM_RIGHT)
+		channel = DFSDM_CHANNEL_6;
 
 
 	// Hack to reset filter - using HAL_DFSDM_FilterDeInit leads to issues when re-initting
-	hdfsdm1_filter0.Instance->FLTCR1 &= ~(DFSDM_FLTCR1_DFEN);
-	hdfsdm1_filter0.State = HAL_DFSDM_FILTER_STATE_RESET;
+	filter->Instance->FLTCR1 &= ~(DFSDM_FLTCR1_DFEN);
+	filter->State = HAL_DFSDM_FILTER_STATE_RESET;
 
 	//s = HAL_DFSDM_ChannelDeInit(&hdfsdm1_channel5);
 	//fprintf(file_pri,"Channel deinit: %d\n",s);
@@ -224,32 +649,35 @@ void stm_dfsdm_initsampling(unsigned order,unsigned fosr,unsigned iosr,unsigned 
 	fprintf(file_pri,"Channel state: %d\n",cs);*/
 
 
-	hdfsdm1_filter0.Instance = DFSDM1_Filter0;
-	hdfsdm1_filter0.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
-	hdfsdm1_filter0.Init.RegularParam.FastMode = DISABLE;
-	hdfsdm1_filter0.Init.RegularParam.DmaMode = ENABLE;
+	if(left_right==STM_DFSDM_LEFT)
+		filter->Instance = DFSDM1_Filter0;					// DAN 27.07.2020 - is this needed? MX_DFSDM1_Init already does this
+	if(left_right==STM_DFSDM_RIGHT)
+		filter->Instance = DFSDM1_Filter1;					// DAN 27.07.2020 - is this needed? MX_DFSDM1_Init already does this
+	filter->Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
+	filter->Init.RegularParam.FastMode = DISABLE;
+	filter->Init.RegularParam.DmaMode = ENABLE;
 	switch(order)
 	{
 		case 1:
-			hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC1_ORDER;
+			filter->Init.FilterParam.SincOrder = DFSDM_FILTER_SINC1_ORDER;
 			break;
 		case 2:
-			hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC2_ORDER;
+			filter->Init.FilterParam.SincOrder = DFSDM_FILTER_SINC2_ORDER;
 			break;
 		case 3:
-			hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
+			filter->Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
 			break;
 		case 4:
-			hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC4_ORDER;
+			filter->Init.FilterParam.SincOrder = DFSDM_FILTER_SINC4_ORDER;
 			break;
 		case 5:
 		default:
-			hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC5_ORDER;
+			filter->Init.FilterParam.SincOrder = DFSDM_FILTER_SINC5_ORDER;
 			break;
 	}
-	hdfsdm1_filter0.Init.FilterParam.Oversampling = fosr;
-	hdfsdm1_filter0.Init.FilterParam.IntOversampling = iosr;
-	s = HAL_DFSDM_FilterInit(&hdfsdm1_filter0);
+	filter->Init.FilterParam.Oversampling = fosr;
+	filter->Init.FilterParam.IntOversampling = iosr;
+	s = HAL_DFSDM_FilterInit(filter);
 	if(s != HAL_OK)
 	{
 		fprintf(file_pri,"\tError initialising filter %d\n",s);
@@ -257,7 +685,7 @@ void stm_dfsdm_initsampling(unsigned order,unsigned fosr,unsigned iosr,unsigned 
 	//else
 		//fprintf(file_pri,"Filter init ok\n");
 
-	// Manually change divider
+	// Manually change divider - the divider is stored in a register of DFSDM1_Channel0, regardless of which channel is actually used.
 	uint32_t t;
 	t = DFSDM1_Channel0->CHCFGR1;
 	//fprintf(file_pri,"CHCFGR1: %8X\n",DFSDM1_Channel0->CHCFGR1);
@@ -298,15 +726,16 @@ void stm_dfsdm_initsampling(unsigned order,unsigned fosr,unsigned iosr,unsigned 
 	else
 		fprintf(file_pri,"Channel init ok\n");*/
 
-	s = HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_5, DFSDM_CONTINUOUS_CONV_ON);
+	s = HAL_DFSDM_FilterConfigRegChannel(filter, channel, DFSDM_CONTINUOUS_CONV_ON);
 	if(s != HAL_OK)
 	{
 		fprintf(file_pri,"\tError configuring channel regular conversion: %d\n",s);
 	}
-
+	//else
+		//fprintf(file_pri,"\tHAL_DFSDM_FilterConfigRegChannel ok\n");
 }
 /******************************************************************************
-	function: stm_dfsdm_clearstat
+	function: stm_dfsdm_stat_clear
 *******************************************************************************
 	Clear audio frame acquisition statistics.
 
@@ -315,15 +744,15 @@ void stm_dfsdm_initsampling(unsigned order,unsigned fosr,unsigned iosr,unsigned 
 	Returns:
 
 ******************************************************************************/
-void stm_dfsdm_clearstat()
+void stm_dfsdm_stat_clear()
 {
-	_stm_dfsmd_ctr_acq=_stm_dfsmd_ctr_loss=0;
+	_stm_dfsmd_ctr_acq[0]=_stm_dfsmd_ctr_acq[1]=_stm_dfsmd_ctr_loss=0;
 }
 unsigned long stm_dfsdm_stat_totframes()
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-		return _stm_dfsmd_ctr_acq;
+		return _stm_dfsmd_ctr_acq[0]+_stm_dfsmd_ctr_acq[1];
 	}
 	return 0;
 }
@@ -337,29 +766,105 @@ unsigned long stm_dfsdm_stat_lostframes()
 }
 
 /******************************************************************************
-	function: stm_dfsdm_acq_poll_int
+	function: stm_dfsdm_acq_poll_internal_old
 *******************************************************************************
 	Polling data acquisition from internal microphone.
 
 	Assumes filter 0 is configured with data coming from DATIN6 on the rising edge.
 
 	Parameters:
+		left_right	-		Can be STM_DFSMD_LEFT or STM_DFSMD_RIGHT (STM_DFSMD_STEREO is not valid here)
 		buffer		-	Buffer which receives the data
 		n			-	Number of samples to acquire
 
 	Returns:
 		Data acquisition time in us
 ******************************************************************************/
-unsigned long stm_dfsdm_acq_poll_internal(int *buffer,unsigned n)
+#if 0
+unsigned long stm_dfsdm_acq_poll_internal_old(unsigned char left_right,int *buffer,unsigned n)
 {
+	fprintf(file_pri,"stm_dfsdm_acq_poll_internal left_right %d buffer %p n: %d\n",left_right,buffer,n);
+
 	unsigned long t1 = timer_us_get();
+	HAL_StatusTypeDef s;
 	for(unsigned i=0;i<n;i++)
 	{
-		HAL_DFSDM_FilterPollForRegConversion(&hdfsdm1_filter0,1000);
+		s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[left_right],1000);
+		if(s!=HAL_OK)
+			fprintf(file_pri,"HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
 		unsigned int c;
-		int v = HAL_DFSDM_FilterGetRegularValue(&hdfsdm1_filter0,(uint32_t*)&c);
+		int v = HAL_DFSDM_FilterGetRegularValue(_stm_dfsdm_filters[left_right],(uint32_t*)&c);
 		buffer[i] = v;
 
+	}
+	unsigned long t2 = timer_us_get();
+	return t2-t1;
+}
+#endif
+/******************************************************************************
+	function: stm_dfsdm_acq_poll_internal
+*******************************************************************************
+	Polling data acquisition from internal microphone.
+
+	Assumes filter 0 is configured with data coming from DATIN6 on the rising edge.
+
+	Parameters:
+		left_right	-	Can be STM_DFSMD_LEFT, STM_DFSMD_RIGHT, or STM_DFSMD_STEREO
+		buffer		-	Buffer which receives the data
+		n			-	Number of samples to acquire. In Stereo mode, n/2 samples from each left and right microphones are acquired and interleaved in the buffer: l0|r0|l1|r1|...
+
+	Returns:
+		Data acquisition time in us
+******************************************************************************/
+unsigned long stm_dfsdm_acq_poll_internal(unsigned char left_right,int *buffer,unsigned n)
+{
+	//fprintf(file_pri,"stm_dfsdm_acq_poll_internal left_right %d buffer %p n: %d\n",left_right,buffer,n);
+
+	unsigned long t1 = timer_us_get();
+	HAL_StatusTypeDef s;
+
+	unsigned inc=1;							// Increment for loop
+	if(left_right==STM_DFSDM_STEREO)		// Stereo mode - acquire half the samples
+		inc=2;
+
+	for(unsigned i=0;i<n;i+=inc)
+	{
+		// Poll until conversion is complete on both channels
+		if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+		{
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_LEFT],1000);
+			if(s!=HAL_OK)
+			{
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
+			}
+		}
+		if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+		{
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_RIGHT],1000);
+			if(s!=HAL_OK)
+			{
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
+			}
+		}
+
+		if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+		{
+			unsigned int c;
+			int v = HAL_DFSDM_FilterGetRegularValue(_stm_dfsdm_filters[STM_DFSDM_LEFT],(uint32_t*)&c);
+			buffer[i] = v;
+		}
+		if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+		{
+			unsigned int c;
+			int v = HAL_DFSDM_FilterGetRegularValue(_stm_dfsdm_filters[STM_DFSDM_RIGHT],(uint32_t*)&c);
+			// Handle the interleaving of data - if stereo buffer[i] has left; buffer[i+1] has right; and i is incremented by 2
+			if(left_right==STM_DFSDM_RIGHT)
+				buffer[i] = v;
+			else
+				buffer[i+1] = v;
+		}
 	}
 	unsigned long t2 = timer_us_get();
 	return t2-t1;
@@ -416,12 +921,13 @@ unsigned char stm_dfsdm_isfull(void)
 
 	Parameters:
 		buffer		-		Pointer to a buffer large enough for an audio frame (STM_DFSMD_BUFFER_SIZE samples)
+		left_right	-		Pointer to a variable that will receive whether the frame is from the left (0) or right (1) microphone
 
 	Returns:
 		0	-	Success
 		1	-	Error (no data available in the buffer)
 *******************************************************************************/
-unsigned char stm_dfsdm_data_getnext(STM_DFSMD_TYPE *buffer,unsigned long *timems,unsigned long *pktctr)
+unsigned char stm_dfsdm_data_getnext(STM_DFSMD_TYPE *buffer,unsigned long *timems,unsigned long *pktctr,unsigned char *left_right)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
@@ -435,6 +941,8 @@ unsigned char stm_dfsdm_data_getnext(STM_DFSMD_TYPE *buffer,unsigned long *timem
 			*timems = _stm_dfsmd_buffers_time[_stm_dfsmd_buffer_rdptr];
 		if(pktctr)
 			*pktctr = _stm_dfsmd_buffers_pktnum[_stm_dfsmd_buffer_rdptr];
+		if(left_right)
+			*left_right = _stm_dfsmd_buffers_leftright[_stm_dfsmd_buffer_rdptr];
 		// Increment the read pointer
 		_stm_dfsmd_buffer_rdptr = (_stm_dfsmd_buffer_rdptr+1)&STM_DFSMD_BUFFER_MASK;
 		return 0;
@@ -452,14 +960,18 @@ unsigned char stm_dfsdm_data_getnext(STM_DFSMD_TYPE *buffer,unsigned long *timem
 	the frame buffers stores only the STM_DFSMD_BUFFER_NUM most recent audio frames.
 	This allows for better alignment with other data sources if buffers were to overrun.
 
+	The function pushes stereo data on a unique circular buffer
+
 	Do not call from user code.
 
 	Parameters:
 		buffer		-		Pointer containing the new audio frame to store in the frame buffer
+		timems		-		Time in millisecond when the callback received the data
+		left_right	-		0 (left) or right (1) microphone
 
 	Returns:
 *******************************************************************************/
-void _stm_dfsdm_data_storenext(int *buffer,unsigned long timems)
+void _stm_dfsdm_data_storenext(int *buffer,unsigned long timems,unsigned char left_right)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
@@ -473,20 +985,25 @@ void _stm_dfsdm_data_storenext(int *buffer,unsigned long timems)
 		}
 		// Here the buffer is not full: copy the data at the write pointer
 		// memcpy((void*)_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr],(void*)buffer,STM_DFSMD_BUFFER_SIZE*sizeof(int));	// Copy if buffers are int; no bitshift to shrink to 16-bit
+		// debug
+		//fprintf(file_pri,"DMA %08X %08X %08X %08X\n",buffer[0], buffer[1],buffer[2],buffer[3]);
 		for(unsigned i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
 		{
 			// Shift right to fit in signed short
-			_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(_stm_dfsdm_rightshift+8);				// 8 LSB are channel number
+			//_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(_stm_dfsdm_rightshift+8);				// 8 LSB are channel number
+			_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(8);				// 8 LSB are channel number
 		}
 		// Store time
 		_stm_dfsmd_buffers_time[_stm_dfsmd_buffer_wrptr] = timems;
 		// Store packet counter
-		_stm_dfsmd_buffers_pktnum[_stm_dfsmd_buffer_wrptr] = _stm_dfsmd_ctr_acq;
+		_stm_dfsmd_buffers_pktnum[_stm_dfsmd_buffer_wrptr] = _stm_dfsmd_ctr_acq[left_right];
+		// Store left/right indication
+		_stm_dfsmd_buffers_leftright[_stm_dfsmd_buffer_wrptr] = left_right;
 
 		// Increment the write pointer
 		_stm_dfsmd_buffer_wrptr = (_stm_dfsmd_buffer_wrptr+1)&STM_DFSMD_BUFFER_MASK;
 		// Increment the frame counter
-		_stm_dfsmd_ctr_acq++;
+		_stm_dfsmd_ctr_acq[left_right]++;
 		return;
 	}
 }
@@ -514,10 +1031,10 @@ void stm_dfsdm_data_clear(void)
 	{
 		_stm_dfsmd_buffer_wrptr=0;
 		_stm_dfsmd_buffer_rdptr=0;
-		stm_dfsdm_clearstat();
+		stm_dfsdm_stat_clear();
 	}
 }
-void stm_dfsdm_data_printstat(void)
+void stm_dfsdm_stat_print(void)
 {
 	fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
 }
@@ -594,13 +1111,14 @@ void stm_dfsdm_data_test()
 
 		if(cmd[i*2]==0)
 		{
-			unsigned char rv = stm_dfsdm_data_getnext(tmp,0,0);
+			unsigned char rv = stm_dfsdm_data_getnext(tmp,0,0,0);
 			fprintf(file_pri,"\tgetnext: %d. Data[0]: %d\n",rv,tmp[0]);
 		}
 		else
 		{
 			tmp[0] = cmd[i*2+1];
-			_stm_dfsdm_data_storenext(tmp,0);
+#warning must fix tmp data type
+			_stm_dfsdm_data_storenext(tmp,0,0);
 		}
 
 		stm_dfsdm_data_test_status();
@@ -624,67 +1142,160 @@ void _stm_dfsdm_data_rdnext(void)
 	}
 }
 */
-
-
 /******************************************************************************
-	function: stm_dfsdm_calib_zero_int
+	function: _stm_dfsdm_offset_calibrate
 *******************************************************************************
-	Calibrate the zero offset
+	Measure the microphone offset and set the offset.
 
-	Assumes filter 0 is configured with data coming from DATIN6 on the rising edge.
+	This function must be called with polling acquisition enabled with
+	stm_dfsdm_acquire_start_poll.
 
 	Parameters:
-		-
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT, STM_DFSMD_STEREO. This parameter is unused if mode is STM_DFSMD_INIT_OFF.
+		print		-	Nonzero to print info
+
 	Returns:
-		Offset
+
 ******************************************************************************/
-int stm_dfsdm_calib_zero_internal()
+void _stm_dfsdm_offset_calibrate(unsigned char left_right,unsigned char print)
+{
+	// Measure offset and print
+	int offset_l,offset_r;
+
+	// This resets the offset left/right/stereo as appropriate
+	stm_dfsdm_offset_set(left_right,0);
+
+	_stm_dfsdm_offset_measure(left_right,&offset_l,&offset_r,print);
+
+	fprintf(file_pri,"\tSetting offset\n");
+	// Call set offset twice to set independent offsets for left and right
+	if(left_right == STM_DFSDM_LEFT || left_right == STM_DFSDM_STEREO)
+		stm_dfsdm_offset_set(STM_DFSDM_LEFT,offset_l);
+	if(left_right == STM_DFSDM_RIGHT || left_right == STM_DFSDM_STEREO)
+			stm_dfsdm_offset_set(STM_DFSDM_RIGHT,offset_r);
+
+	// Measure offset again and print
+	_stm_dfsdm_offset_measure(left_right,&offset_l,&offset_r,print);
+}
+/******************************************************************************
+	function: _stm_dfsdm_offset_measure
+*******************************************************************************
+	Measure the microphone offset.
+
+	This function must be called with polling acquisition enabled with
+	stm_dfsdm_acquire_start_poll.
+
+	Parameters:
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT, STM_DFSMD_STEREO. This parameter is unused if mode is STM_DFSMD_INIT_OFF.
+		offset_l	-	Left offset. This won't be modified if the measurement is only of the right microphone.
+		offset_r	-	Right offset. This won't be modified if the measurement is only of the left microphone.
+		print		-	Nonzero to print info
+
+	Returns:
+
+******************************************************************************/
+int _stm_dfsdm_offset_measure(unsigned char left_right,int *offset_l,int *offset_r,unsigned char print)
 {
 	unsigned maxsample=8000;
 	int data[maxsample];
 
-	// Acquire bit of data to clear the DFSDM buffer
-	stm_dfsdm_acq_poll_internal(data,1000);
+	//fprintf(file_pri,"stm_dfsdm_calib_zero_internal %d\n",left_right);
 
-	unsigned long dt = stm_dfsdm_acq_poll_internal(data,maxsample);
+	if(print)
+		fprintf(file_pri,"\tMeasuring microphone offset: ");
+
+	// Acquire bit of data to clear the DFSDM buffer
+	stm_dfsdm_acq_poll_internal(left_right,data,2000);
+
+	unsigned long dt = stm_dfsdm_acq_poll_internal(left_right,data,maxsample);
 	(void) dt;
 
-	// Calculate the mean
-	long long mean = 0;
-	for(unsigned i=0;i<maxsample;i++)
-		mean+=data[i];
-	mean/=(long long)maxsample;
+	// Calculate the mean alternating left/right - mono is addressed later
+	long long mean_l = 0,mean_r=0;
+	for(unsigned i=0;i<maxsample;i+=2)
+	{
+		mean_l+=data[i];
+		mean_r+=data[i+1];
+	}
+	if(left_right==STM_DFSDM_STEREO)
+	{
+		mean_l/=(long long)(maxsample/2);
+		mean_r/=(long long)(maxsample/2);
+		if(offset_l)
+			*offset_l = mean_l;
+		if(offset_r)
+			*offset_r = mean_r;
+	}
+	else
+	{
+		// Mono: combine the sum mean_l and mean_r;
+		mean_l+=mean_r;					// mean_l is the overall mean
+		mean_l/=(long long)maxsample;
+		mean_r = mean_l;				// To simplify printing below
+		if(left_right==STM_DFSDM_LEFT)
+		{
+			if(offset_l)
+				*offset_l = mean_l;
+		}
+		if(left_right==STM_DFSDM_RIGHT)
+		{
+			if(offset_r)
+				*offset_r = mean_l;
+		}
+	}
+	if(print)
+	{
+		if(left_right == STM_DFSDM_LEFT || left_right == STM_DFSDM_STEREO)
+			fprintf(file_pri,"left: %ld ",(long)mean_l);
+		if(left_right == STM_DFSDM_RIGHT || left_right == STM_DFSDM_STEREO)
+			fprintf(file_pri,"right: %ld ",(long)mean_r);
+		fprintf(file_pri,"\n");
+	}
 
-	return (int)mean;
+	return 0;
 }
 
 /******************************************************************************
-	function: stm_dfsdm_acquireon
+	function: stm_dfsdm_acquire_start_dma
 *******************************************************************************
-	Turns on audio acquisition via framebuffers.
+	Turns on audio acquisition via DMA and framebuffers.
 
 	Parameters:
-		-
+		left_right	-	One of STM_DFSMD_LEFT, STM_DFSMD_RIGHT, STM_DFSMD_STEREO
 	Returns:
 		Offset
 ******************************************************************************/
-int stm_dfsdm_acquirdmaeon()
+int stm_dfsdm_acquire_start_dma(unsigned char left_right)
 {
-	HAL_StatusTypeDef s1 = HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0,(int32_t*)_stm_dfsdm_dmabuf,STM_DFSMD_BUFFER_SIZE*2);
-	if(s1==0)
-		fprintf(file_pri,"Audio frame acquisition by DMA started\n");
-	else
-		fprintf(file_pri,"Audio frame acquisition by DMA error: %d\n",s1);
+	HAL_StatusTypeDef s1=HAL_OK;
+
+	//fprintf(file_pri,"stm_dfsdm_acquire_dma_start: left_right=%d\n",left_right);
+
+	//stm_dfsdm_state_print();
+
+	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+	{
+		s1 = HAL_DFSDM_FilterRegularStart_DMA(_stm_dfsdm_filters[0],(int32_t*)_stm_dfsdm_dmabuf,STM_DFSMD_BUFFER_SIZE*2);
+		if(s1==0)
+			;//fprintf(file_pri,"Audio frame acquisition by DMA left started\n");
+		else
+			fprintf(file_pri,"Audio frame acquisition by DMA left error: %d\n",s1);
+	}
+
+	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+	{
+		s1 = HAL_DFSDM_FilterRegularStart_DMA(_stm_dfsdm_filters[1],(int32_t*)_stm_dfsdm_dmabuf2,STM_DFSMD_BUFFER_SIZE*2);		// Need a different DMA buffer
+		if(s1==0)
+			;//fprintf(file_pri,"Audio frame acquisition by DMA right started\n");
+		else
+			fprintf(file_pri,"Audio frame acquisition by DMA right error: %d\n",s1);
+	}
+
+	//stm_dfsdm_state_print();
 
 	// Clear buffers & statistics
 	stm_dfsdm_data_clear();
 	return s1;
-}
-int stm_dfsdm_acquirdmaeoff()
-{
-	HAL_StatusTypeDef s3 = HAL_DFSDM_FilterRegularStop_DMA(&hdfsdm1_filter0);
-	//fprintf(file_pri,"Audio frame acquisition by DMA stopped: %d\n",s3);
-	return s3;
 }
 char *dfsdm_chcfgr1(unsigned reg)
 {
@@ -774,50 +1385,73 @@ char *dfsdm_chcfgr2(unsigned reg)
 //unsigned int ctrdmacb;
 void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter)
 {
-	//unsigned long t = timer_us_get();
-	//fprintf(file_pri,"cb %lu %lu\n",t,t-tdmacb);
-	//fprintf(file_pri,"cb %d: %lu %lu\n",ctrdmacb,t,t-tdmacb);
-	//fprintf(file_itm,"cb %d: %lu %lu\n",ctrdmacb,t,t-tdmacb);
-	//ctrdmacb++;
-	//tdmacb = t;
-	/*fprintf(file_pri,"\t%08X %08X %08X %08X %08X %08X %08X %08X\n",audbuf[0],audbuf[1],
-				audbuf[AUDBUFSIZ/2-2],audbuf[AUDBUFSIZ/2-1],
-				audbuf[AUDBUFSIZ/2],audbuf[AUDBUFSIZ/2+1],
-				audbuf[AUDBUFSIZ-2],audbuf[AUDBUFSIZ-1]);*/
-	/*for(int i=0;i<AUDBUFSIZ;i++)
+#if 0
+	fprintf(file_pri,"Full CB: ");
+	for(int i=0;i<4;i++)
 	{
-		fprintf(file_pri,"%08X ",audbuf[i]);
+		fprintf(file_pri,"%08X ",_stm_dfsdm_dmabuf[STM_DFSMD_BUFFER_SIZE+i]);
 	}
-	fprintf(file_pri,"\n\n");*/
-	//for(int i=0;i<AUDBUFSIZ;i++)
-	//	audbuf[i]=0x12345678;
+	fprintf(file_pri," -  ");
+	for(int i=0;i<4;i++)
+	{
+		fprintf(file_pri,"%08X ",_stm_dfsdm_dmabuf2[STM_DFSMD_BUFFER_SIZE+i]);
+	}
+	fprintf(file_pri,"\n");
 
-	_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf+STM_DFSMD_BUFFER_SIZE,timer_ms_get());
+	// Identify which is the filter and therefore microphone which triggered the callback
+	fprintf(file_pri,"%p (%p %p)\n",hdfsdm_filter,_stm_dfsdm_filters[0],_stm_dfsdm_filters[1]);
+#endif
+
+	//fprintf(file_pri,"%c\n",hdfsdm_filter==_stm_dfsdm_filters[0]?'L':'R');
+
+	if(hdfsdm_filter == _stm_dfsdm_filters[0])
+		_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf+STM_DFSMD_BUFFER_SIZE,timer_ms_get(),0);		// Left mic
+	else
+		_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf2+STM_DFSMD_BUFFER_SIZE,timer_ms_get(),1);		// Right mic
+
+#if 0
+	for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
+	{
+		_stm_dfsdm_dmabuf[STM_DFSMD_BUFFER_SIZE+i]=0x41;
+		_stm_dfsdm_dmabuf2[STM_DFSMD_BUFFER_SIZE+i]=0x42;
+	}
+#endif
 }
 void HAL_DFSDM_FilterRegConvHalfCpltCallback (DFSDM_Filter_HandleTypeDef *hdfsdm_filter)
 {
-	//unsigned long t = timer_us_get();
-	//fprintf(file_pri,"halfcb %u %lu %lu\n",ctrdmacb,t,t-tdmacb);
-	//fprintf(file_itm,"halfcb %u %lu %lu\n",ctrdmacb,t,t-tdmacb);
-	//ctrdmacb++;
-	//tdmacb = t;
-	/*fprintf(file_pri,"\t%08X %08X %08X %08X %08X %08X %08X %08X\n",audbuf[0],audbuf[1],
-			audbuf[AUDBUFSIZ/2-2],audbuf[AUDBUFSIZ/2-1],
-			audbuf[AUDBUFSIZ/2],audbuf[AUDBUFSIZ/2+1],
-			audbuf[AUDBUFSIZ-2],audbuf[AUDBUFSIZ-1]);*/
-/*	for(int i=0;i<AUDBUFSIZ;i++)
+#if 0
+	fprintf(file_pri,"Half CB: ");
+	for(int i=0;i<4;i++)
 	{
-		fprintf(file_pri,"%08X ",audbuf[i]);
+		fprintf(file_pri,"%08X ",_stm_dfsdm_dmabuf[i]);
 	}
-	fprintf(file_pri,"\n");*/
-	//for(int i=0;i<AUDBUFSIZ;i++)
-	//	audbuf[i]=0x87654321;
+	fprintf(file_pri," -  ");
+	for(int i=0;i<4;i++)
+	{
+		fprintf(file_pri,"%08X ",_stm_dfsdm_dmabuf2[i]);
+	}
+	fprintf(file_pri,"\n");
+
+	// Identify which is the filter and therefore microphone which triggered the callback
+	fprintf(file_pri,"%p (%p %p)\n",hdfsdm_filter,_stm_dfsdm_filters[0],_stm_dfsdm_filters[1]);
+#endif
+
+	//for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i+=4)fprintf(file_pri,"%c\n",hdfsdm_filter==_stm_dfsdm_filters[0]?'L':'R');
 
 	// Copy data into next buffer
+	if(hdfsdm_filter == _stm_dfsdm_filters[0])
+		_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf,timer_ms_get(),0);		// Left mic
+	else
+		_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf2,timer_ms_get(),1);		// Right mic
 
-	_stm_dfsdm_data_storenext(_stm_dfsdm_dmabuf,timer_ms_get());
-
-
+#if 0
+	// Debug clear
+	for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
+	{
+		_stm_dfsdm_dmabuf[i]=0x31;
+		_stm_dfsdm_dmabuf2[i]=0x32;
+	}
+#endif
 }
 
 
@@ -837,6 +1471,7 @@ unsigned long stm_dfsmd_perfbench_withreadout(unsigned long mintime)
 	//const unsigned long int mintime=1000;
 	STM_DFSMD_TYPE audio[STM_DFSMD_BUFFER_SIZE];
 	unsigned long audioms,audiopkt;
+	unsigned char left_right;
 
 	ctr=0;
 	nsample=0;
@@ -853,7 +1488,7 @@ unsigned long stm_dfsmd_perfbench_withreadout(unsigned long mintime)
 		// Simulate reading out the data from the buffers
 		// Read until no data available
 
-		while(!stm_dfsdm_data_getnext(audio,&audioms,&audiopkt))
+		while(!stm_dfsdm_data_getnext(audio,&audioms,&audiopkt,&left_right))
 			nsample++;
 
 	}
@@ -902,3 +1537,115 @@ void stm_dfsdm_getmodename(unsigned char mode,char *buffer)
 		return;
 	strcpy(buffer,_stm_dfsdm_modes[mode]);
 }
+
+/******************************************************************************
+	function: stm_dfsdm_acquire_stop_all
+*******************************************************************************
+	Stop all internal and polling data acquisition.
+
+	Parameters:
+		-
+
+	Returns:
+		-
+*******************************************************************************/
+void stm_dfsdm_acquire_stop_all()
+{
+	//fprintf(file_pri,"stm_dfsdm_acquire_stop_all: ");
+	HAL_StatusTypeDef s;
+	for(unsigned i=0;i<2;i++)
+	{
+		s=HAL_DFSDM_FilterRegularStop_DMA(_stm_dfsdm_filters[i]);
+		/*if(s==HAL_OK)
+			fprintf(file_pri,"DMA %d OK; ",i);
+		else
+			fprintf(file_pri,"DMA %d KO; ",i);*/
+		s=HAL_DFSDM_FilterRegularStop(_stm_dfsdm_filters[i]);
+		/*if(s==HAL_OK)
+			fprintf(file_pri,"poll %d OK; ",i);
+		else
+			fprintf(file_pri,"poll %d KO; ",i);*/
+	}
+	//fprintf(file_pri,"\n");
+	(void) s;
+}
+void stm_dfsdm_acquire_stop_poll()
+{
+	//fprintf(file_pri,"stm_dfsdm_acquire_stop_poll: ");
+	HAL_StatusTypeDef s;
+	for(unsigned i=0;i<2;i++)
+	{
+		/*s=HAL_DFSDM_FilterRegularStop_DMA(_stm_dfsdm_filters[i]);
+		if(s==HAL_OK)
+			fprintf(file_pri,"DMA %d OK; ",i);
+		else
+			fprintf(file_pri,"DMA %d KO; ",i);*/
+		s=HAL_DFSDM_FilterRegularStop(_stm_dfsdm_filters[i]);
+		/*if(s==HAL_OK)
+			fprintf(file_pri,"poll %d OK; ",i);
+		else
+			fprintf(file_pri,"poll %d KO; ",i);*/
+	}
+	(void) s;
+	fprintf(file_pri,"\n");
+}
+
+void stm_dfsdm_state_print()
+{
+	fprintf(file_pri,"Channel states:\n");
+	for(int i=0;i<2;i++)
+		fprintf(file_pri,"\tChannel %d: %d\n",i,HAL_DFSDM_ChannelGetState(_stm_dfsdm_channels[i]));
+	fprintf(file_pri,"Filter states:\n");
+	for(int i=0;i<2;i++)
+		fprintf(file_pri,"\tFilter %d: %d\n",i,HAL_DFSDM_FilterGetState(_stm_dfsdm_filters[i]));
+
+}
+/******************************************************************************
+	function: stm_dfsdm_memoryused
+*******************************************************************************
+	Returns how much memory is used in the buffers of the DFSDM library.
+
+	This only accounts for memory used which can increase or decrease
+	when buffering parameters (e.g. number of buffers, buffer size) is modified.
+
+	Parameters:
+		-
+
+	Returns:
+		Memory used
+*******************************************************************************/
+unsigned stm_dfsdm_memoryused()
+{
+	return sizeof(_stm_dfsmd_buffers)+sizeof(_stm_dfsmd_buffers_time)+sizeof(_stm_dfsmd_buffers_pktnum)+sizeof(_stm_dfsdm_dmabuf)+sizeof(_stm_dfsdm_dmabuf2)+sizeof(_stm_dfsmd_buffers_leftright);
+
+}
+
+void stm_dfsdm_printreg()
+{
+	DFSDM_Channel_TypeDef *channels[8]={	DFSDM1_Channel0,DFSDM1_Channel1,DFSDM1_Channel2,DFSDM1_Channel3,
+											DFSDM1_Channel4,DFSDM1_Channel5,DFSDM1_Channel6,DFSDM1_Channel7};
+	for(int i=0;i<8;i++)
+	{
+		fprintf(file_pri,"Channel %d (%p)\n",i,channels[i]);
+		fprintf(file_pri,"\tCHCFGR1: %08X %s\n",(unsigned)channels[i]->CHCFGR1,dfsdm_chcfgr1(channels[i]->CHCFGR1));
+		fprintf(file_pri,"\tCHCFGR2: %08X %s\n",(unsigned)channels[i]->CHCFGR2,dfsdm_chcfgr2(channels[i]->CHCFGR2));
+		fprintf(file_pri,"\tCHAWSCDR: %08X\n",(unsigned)channels[i]->CHAWSCDR);
+		fprintf(file_pri,"\tCHWDATAR: %08X\n",(unsigned)channels[i]->CHWDATAR);
+		fprintf(file_pri,"\tCHDATINR: %08X\n",(unsigned)channels[i]->CHDATINR);
+	}
+
+	DFSDM_Filter_TypeDef *filters[4]={	DFSDM1_Filter0,DFSDM1_Filter1,DFSDM1_Filter2,DFSDM1_Filter3};
+	for(int i=0;i<4;i++)
+	{
+		fprintf(file_pri,"Filter %d (%p)\n",i,filters[i]);
+		fprintf(file_pri,"\tFLTCR1: %08X FLTCR2: %08X\n",(unsigned)filters[i]->FLTCR1,(unsigned)filters[i]->FLTCR2);
+		fprintf(file_pri,"\tFLTISR: %08X FLTICR: %08X\n",(unsigned)filters[i]->FLTISR,(unsigned)filters[i]->FLTICR);
+		fprintf(file_pri,"\tFLTJCHGR: %08X FLTFCR: %08X\n",(unsigned)filters[i]->FLTJCHGR,(unsigned)filters[i]->FLTFCR);
+		fprintf(file_pri,"\tFLTJDATAR: %08X FLTRDATAR: %08X\n",(unsigned)filters[i]->FLTJDATAR,(unsigned)filters[i]->FLTRDATAR);
+		fprintf(file_pri,"\tFLTAWHTR: %08X FLTAWLTR: %08X\n",(unsigned)filters[i]->FLTAWHTR,(unsigned)filters[i]->FLTAWLTR);
+		fprintf(file_pri,"\tFLTAWSR: %08X FLTAWCFR: %08X\n",(unsigned)filters[i]->FLTAWSR,(unsigned)filters[i]->FLTAWCFR);
+		fprintf(file_pri,"\tFLTEXMAX: %08X FLTEXMIN: %08X\n",(unsigned)filters[i]->FLTEXMAX,(unsigned)filters[i]->FLTEXMIN);
+		fprintf(file_pri,"\tFLTCNVTIMR: %08X\n",(unsigned)filters[i]->FLTCNVTIMR);
+	}
+}
+

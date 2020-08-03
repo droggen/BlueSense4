@@ -33,6 +33,7 @@
 #include "sd/stm_sdio.h"
 #include "stmdfsdm.h"
 #include "uiconfig.h"
+#include "max31343.h"
 
 void testperiphvcc()
 {
@@ -57,14 +58,34 @@ void testperiphvcc()
 		}
 	}
 }
+void testpoweroff()
+{
+	int tc=0;
+	while(1)
+	{
+		fprintf(file_pri,"test %d\n",tc++);
+		HAL_Delay(200);
+		if( (tc%100) == 50 )
+		{
+			fprintf(file_pri,"system_poweroff\n");
+			HAL_Delay(100);
+			system_poweroff();
+			fprintf(file_pri,"Call done.\n");
+		}
+		if( (tc%100) == 99 )
+		{
+			fprintf(file_pri,"Calling system_poweron\n");
+			HAL_Delay(100);
+			system_poweron();
+			fprintf(file_pri,"Call done.\n");
+		}
+	}
+}
 
 void bs4_init()
 {
 	bs4_init_basic();
 	bs4_init_extended();
-
-
-
 }
 
 
@@ -161,11 +182,16 @@ void bs4_init_extended()
 		fprintf(file_pri,"Fail\n");
 #endif
 
-	//goto toto1;
+#if 1
+	fprintf(file_pri,"Checking external RTC... ");
+	if(max31343_isok())
+		fprintf(file_pri,"Ok\n");
+	else
+		fprintf(file_pri,"Fail\n");
+#endif
 
-	// Turn on peripheral VCC
 	system_periphvcc_enable();
-
+	goto toto1;
 
 #if BUILD_BLUETOOTH==1
 	// Open serial BT usart file
@@ -225,6 +251,7 @@ toto1:
 	system_motionvcc_enable();
 
 	// Check MPU
+#if 0
 	fprintf(file_pri,"Checking MPU... ");
 	if(mpu_isok())
 		fprintf(file_pri,"Ok\n");
@@ -235,6 +262,7 @@ toto1:
 	// MPU INITIALISATION
 	fprintf(file_pri,"Initialise MPU\n");
 	mpu_init();
+#endif
 
 #if 0
 	// Estimate baseline performance (optional)
@@ -268,7 +296,7 @@ toto1:
 
 	// Init audio
 	//stm_dfsdm_init(STM_DFSMD_INIT_16K);
-	stm_dfsdm_init(STM_DFSMD_INIT_OFF);
+	stm_dfsdm_init(STM_DFSMD_INIT_OFF,STM_DFSDM_STEREO);
 
 
 

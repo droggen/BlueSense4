@@ -17,6 +17,7 @@ void system_periphvcc_disable();
 void system_motionvcc_enable();
 void system_motionvcc_disable();
 void system_poweroff();
+void system_poweron();
 
 void system_periph_setrn41resetpin(int set);
 

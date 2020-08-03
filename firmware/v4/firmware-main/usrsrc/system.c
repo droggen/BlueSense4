@@ -33,6 +33,11 @@ void system_poweroff()
 	// Hardware v4: turn off power by clearing PWR_ON pin
 	HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_RESET);
 }
+void system_poweron()
+{
+	// Hardware v4: maintain power on by setting PWR_ON pin
+	HAL_GPIO_WritePin(PWR_ON_GPIO_Port, PWR_ON_Pin, GPIO_PIN_SET);
+}
 
 void system_periphvcc_enable()
 {

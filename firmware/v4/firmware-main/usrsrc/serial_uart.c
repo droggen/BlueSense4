@@ -81,7 +81,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 
 	int p = serial_uart_init(periph,1);
 
-	itmprintf("aft serial_uart_init\n");
+	//itmprintf("aft serial_uart_init\n");
 
 	// optional
 	if(__p)
@@ -105,7 +105,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	iof.seek = 0;
 	f = fopencookie((void*)sp,"w+",iof);
 
-	itmprintf("fopencookie: %p\n",f);
+	//itmprintf("fopencookie: %p\n",f);
 
 	// Buffering can lead to issues when entering command modes ($$$)
 	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
@@ -140,7 +140,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 // >=0 ok
 int serial_uart_init(USART_TypeDef *h,int interrupt)
 {
-	fprintf(file_pri,"serial_uart_init\n");
+	//fprintf(file_pri,"serial_uart_init\n");
 	// Static allocate a data structure
 	int a = staticalloc_alloc(_serial_uart_param_used,SERIALUARTNUMBER);
 	if(a==-1)	// Allocation failed
@@ -149,7 +149,7 @@ int serial_uart_init(USART_TypeDef *h,int interrupt)
 	// Initialise the hardware
 
 
-	itmprintf("serial_uart_init: ok (%d)\n",a);
+	//itmprintf("serial_uart_init: ok (%d)\n",a);
 
 	// Initialise the circular buffers with the data buffers
 	buffer_init(&_serial_uart_param[a].rxbuf,_serial_uart_rx_buffer[a],SERIAL_UART_RX_BUFFERSIZE);
@@ -165,14 +165,14 @@ int serial_uart_init(USART_TypeDef *h,int interrupt)
 	_serial_uart_param[a].fischar = &serial_uart_fischar;
 
 	// Initialise the interrupts
-	itmprintf("before ie\n");
-	fprintf(file_pri,"about to enable interrupt\n");
+	//itmprintf("before ie\n");
+	//fprintf(file_pri,"about to enable interrupt\n");
 	if(interrupt)
 	{
 		serial_usart_interruptenable(h);
 	}
-	itmprintf("after ie\n");
-	fprintf(file_pri,"after enable interrupt\n");
+	//itmprintf("after ie\n");
+	//fprintf(file_pri,"after enable interrupt\n");
 
 	// Return ID of serial_uart
 	return a;

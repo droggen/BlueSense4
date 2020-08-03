@@ -40,7 +40,6 @@ extern DFSDM_Channel_HandleTypeDef hdfsdm1_channel5;
 extern DFSDM_Channel_HandleTypeDef hdfsdm1_channel6;
 
 /* USER CODE BEGIN Private defines */
-
 /* USER CODE END Private defines */
 
 void MX_DFSDM1_Init(void);

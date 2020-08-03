@@ -8,7 +8,6 @@
 #include "global.h"
 #include "serial.h"
 #include "i2c.h"
-#include "pkt.h"
 #include "wait.h"
 //#include "init.h"
 #include "uiconfig.h"
@@ -18,6 +17,7 @@
 
 #include "helper_num.h"
 #include "commandset.h"
+#include "mode_main.h"
 #include "mode_global.h"
 #include "mode_audio.h"
 #include "usrmain.h"
@@ -27,31 +27,12 @@
 #include "stmdfsdm.h"
 #include "ufat.h"
 
-//#include "i2s.h"
-//#include "spi.h"
-//#include "pdm2pcm_glo.h"
-//#include "pdm2pcm.h"
-//#include "stm32f4xx_hal_rcc.h"
+
+
+
 
 /*
-Settings:
-	DFSDM1 clock: 20MHz
-	Oversampling: 1024
-	Clock divider: 12
-
-Time 5000 samples:
-	fastsinc: 5123630
-	1 order: 1282198
-	2 order: 2564364
-	3 order: 3844158
-	5 order: 6406599
-
-
-20MHz, sinc5, 64x, 1x, /12: 407386us 407400us: 81.4772us/sample
-20MHz, sinc5, 64x, 1x, /12, systemclock: 977625 us -> 195.525us/sample
-
-*/
-/*
+ * V3:
 	Filter 2 = channel 2 = rising edge = U1 = LR=0 (below SDA/SCL on extension)
 	Filter 3 = channel 3 = falling edge = U2 = LR=VCC (next to AVCC on extension)
 
@@ -95,20 +76,14 @@ Time 5000 samples:
 
 
 */
-int aud_int_channel6=1;
+//int aud_int_channel6=1;
 
 //#define AUDBUFSIZ 4096
-#define AUDBUFSIZ 128
+/*#define AUDBUFSIZ 128
 //#define AUDBUFSIZ (STM_DFSMD_BUFFER_SIZE*2)				// Twice size for copy on half full and full
-int audbuf[AUDBUFSIZ];
+int audbuf[AUDBUFSIZ];*/
 
 
-const char help_aud_1[] = "Tests";
-const char help_aud_reg[] = "Print I2S registers";
-const char help_aud_init[] = "Initialisation";
-const char help_aud_filter_init[] = "Initialisation of filter";
-const char help_aud_rec[] = "R,<r> with r=0 for 0%; r=1 for 100%; r=2 for 50%; r=3 for 25%; r=4 for 75%";
-const char help_aud_printrec[] = "Print current recording";
 
 
 const COMMANDPARSER CommandParsersAudio[] =
@@ -116,35 +91,57 @@ const COMMANDPARSER CommandParsersAudio[] =
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
 
-	{0,0,"---- General help: internal microphone ----"},
-	{0,0,"Use I to initialise a sampling mode followed by L to log audio to a file. Sampling is done by DMA."},
-	{0,0,"Custom sampling is initialised with i, followed by either: 1) D for DMA acquisition and L to log data; or 2) S for polling acquisition and P to acquire/print data"},
-	{0,0,"---- General help: external microphone ----"},
-	{0,0,"External microphone data is acquired by polling with S,1 followed by p."},
-	{0,0,"---- Audio test functions ----"},
-	{'I',CommandParserAudInit,"I[,<mode>] Initialise internal audio acquisition. Without parameters prints available modes."},
-	{'L',CommandParserAudLog,"L,<lognum> Log audio to lognum. Use I (or i and D) beforehand to start sampling)"},
-	{'K',CommandParserAudBench,"Benchmark internal mic acquisition overhead"},
-	{0,0,"---- Developer functions ----"},
-	{'R',CommandParserAudReg,"Print DFSDM registers"},
-	{'O',CommandParserAudInternalOffset,"Measure internal mic zero offset (issue S beforehand)"},
-	{'Z',CommandParserAudZeroCalibrate,"Zero-calibration of internal mic"},
-	{'z',CommandParserAudZeroCalibrateClear,"Clears zero-calibration of internal mic"},
-	{'D',CommandParserAudDMA,"Start sampling with DMA acquisition"},
-	{'d',CommandParserAudDMAStop,"Stop sampling with DMA acquisition"},
-	{'S',CommandParserAudStart,"S[,<ext>] Start sampling with polling acquisition on internal mic or external mic when ext=1"},
-	{'s',CommandParserAudStop,"s[,<ext>] Stop sampling with polling acquisition on internal mic or external mic when ext=1"},
+	{0,0,"---- General information ----"},
+	{0,0,"Use S to initialise and start sampling via DMA. Stream data with d or x; log data with L."},
+	{0,0,"Low level initialisation-only (sampling is not started): I or i for pre-defined or custom settings. Start sampling with D or P."},
+	{0,0,"<left_right> must be identical to the initialisation value (S, I, i) for all subsequent commands (D, P, p, O, Z, etc)."},
+	{0,0,"<left_right>: 0=left, 1=right, 2=stereo."},
+	{0,0,"Stop sampling (s) and re-initialise to change betewen DMA and polling."},
+	{0,0,"---- Initialisation and start/stop of sampling ----"},
+	{'S',CommandParserAudInitStartDMA,"S[,<mode>,<left_right>] Initialise microphone acquisition from a pre-defined mode, zero calibrate, and start sampling with DMA.\n\t\tNo parameters: prints available modes. "},
+	{'I',CommandParserAudInitOnly,"I[,<mode>,<left_right>] Initialise microphone acquisition from a pre-defined mode, without starting sampling.\n\t\tStart sampling with D or P."},
+	{'i',CommandParserAudInitOnlyDetailed,"i,<order>,<fosr>,<isr>,<div>,<rightshift>,<left_right> Initialise microphone acquisition with custom settings.\n\t\tStart sampling with D or P."},
+	{'D',CommandParserAudDMAStart,"D,<left_right> Start DMA sampling. Use after I or i, with the same left_right parameter."},
+	{'P',CommandParserAudPollStart,"P,<left_right> Start polling sampling. Use after I or i, with the same left_right parameter."},
+	{'s',CommandParserAudStop,"Stop DMA and polling sampling"},
+	{0,0,"---- Display acquired data ----"},
+	{'d',CommandParserAudDMAPrint,"d[,<downsample>] Stream data acquired via DMA in frame format. Sampling must be started with S, or I|i and D.\n\t\tDownsample=0: display summary statistics. downsample>=1: display samples with downsampling (1=no downsampling)."},
+	{'X',CommandParserAudDMAPrintStereo,"X[,<downsample>] Stream data acquired via DMA in stereo 2-column format (same as L). Sampling must be started with S, or I|i and D.\n\t\tOptionally downsample by the specified factor (1=no downsampling)."},
+	{'x',CommandParserAudDMAPrintStereoBin,"x[,<downsample>] Stream data acquired via DMA in a 30-bit binary stereo format (\"D;ss\" in DScope). Sampling must be started with S, or I|i and D.\n\t\tOptionally downsample by the specified factor (1=no downsampling)."},
+	{'p',CommandParserAudPollPrint,"p,<left_right> Stream data acquired via polling.\n\t\tleft_right must be identical to that specified in I or i, otherwise the function blocks on unavailable channels."},
+	{0,0,"---- Logging ----"},
+	{'L',CommandParserAudLog,"L,<lognum> Log data acquired via DMA to lognum. Sampling must be started with S, or I|i and D."},
+	{0,0,"--- Microphone offset cancellation ---"},
+	{'Z',CommandParserAudOffsetAutoCalibrate,"Z,<left_right> Zero-calibrate. Polling sampling (P) must be active."},
+	{'z',CommandParserAudOffsetClear,"Clears zero-calibration"},
+	{'O',CommandParserAudOffsetInternalMeasure,"O,<left_right>: Measure offset. Polling sampling (P) must be active."},
+	{'o',CommandParserAudOffsetSet,"o,<off_l>,<off_r>: Set left and right offset (offset subtracted from samples). Polling sampling (P) must be active."},
+	{0,0,"---- Statistics ----"},
+	{'T',CommandParserAudStatPrint,"Print DMA acquisition statistics"},
+	{'t',CommandParserAudStatClear,"Clear DMA acquisition statistics"},
+	{0,0,"---- Various ----"},
+	{'K',CommandParserAudBench,"Benchmark DMA acquisition overhead"},
+	{'q',CommandParserAudStatus,"Channel and filter status"},
+	{'G',CommandParserAudReg,"Print DFSDM registers"},
+	{'R',CommandParserAudRightshift,"R,<shift_l>,<shift_r> Set the hardware right-shift"},
+
+	{0,0,"---- TODO ----"},
+	{0,0,"- Play with the dividers"},
+
+
+
+	//{'d',CommandParserAudDMAStop,"Stop sampling with DMA acquisition"},
+	//{'q',CommandParserAudStart,"S[,<ext>] Start sampling with polling acquisition on internal mic or external mic when ext=1"},
+
 
 	//{'t',CommandParserAudTest,"Test frame buffers"},
 
 
-	{'A',CommandParserAudDMAAcquire,"Audio acquisition via DMA (use I, or i and D, beforehand to start sampling)"},
-	{'a',CommandParserAudDMAAcquireStat,"Audio acquisition via DMA and print statistics after keypress"},
-	{'P',CommandParserAudPoll,"Audio acquisition via polling on internal mic (use S beforehand to start sampling)"},
-	{'p',CommandParserAudPollExtStereo,"Audio acquisition via polling on external mic (use S,1 beforehand to start sampling)"},
 
-	{'i',CommandParserAudInitDetailed,"i,<order>,<fosr>,<isr>,<div>,<rightshift> Low-level initialisation of audio acquisition (overrides I)"},
-	{'F',CommandParserAudFFT,"FFT on internal mic"},
+	//{'p',CommandParserAudPollExtStereo,"Audio acquisition via polling on external mic (use S,1 beforehand to start sampling)"},
+
+
+	//{'F',CommandParserAudFFT,"FFT on internal mic"},
 
 
 
@@ -215,8 +212,9 @@ unsigned char CommandParserAudStart(char *buffer,unsigned char size)
 unsigned char CommandParserAudStop(char *buffer,unsigned char size)
 {
 	(void)size;
+	// External code path not maintained.
+#if 0
 	int ext=0;
-
 	if(ParseCommaGetNumParam(buffer)>1)
 		return 2;
 	if(ParseCommaGetNumParam(buffer)==1)
@@ -227,43 +225,27 @@ unsigned char CommandParserAudStop(char *buffer,unsigned char size)
 	if(ext<0 || ext>1)
 		return 2;
 
-	fprintf(file_pri,"Stop audio acquisition for polling on %s microphone\n",ext?"external":"internal");
+	fprintf(file_pri,"Stop audio acquisition on %s microphone\n",ext?"external":"internal");
 
 	if(ext)
 	{
+#warning Codepath for external mics not maintained.
 		HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter2);			// External left/right channels
 		HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter3);			// External left/right channels
 	}
 	else
 	{
-		HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter0);			// filter 0 is internal mic filter
-		// HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter1);		// filter 1 is not used
+#endif
+		stm_dfsdm_acquire_stop_all();
+#if 0
 	}
+#endif
 
 
 	return 0;
 }
-unsigned char CommandParserAudPoll(char *buffer,unsigned char size)
-{
-	(void)size; (void)buffer;
 
-	unsigned maxsample=10000;
-	int data[maxsample];
-	unsigned long dt = stm_dfsdm_acq_poll_internal(data,maxsample);
-
-	for(int i=0;i<maxsample;i++)
-	{
-		fprintf(file_pri,"%d\n",data[i]);
-	}
-	unsigned long long sr = (unsigned long long)maxsample*1000000/dt;
-
-
-	fprintf(file_pri,"%% Acquisition time for %u samples: %lu us. Sample rate: %lu\n",maxsample,dt,(unsigned long)sr);
-
-
-
-	return 0;
-}
+#if 0
 unsigned char CommandParserAudPoll2(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
@@ -352,6 +334,8 @@ unsigned char CommandParserAudPoll3(char *buffer,unsigned char size)
 
 	return 0;
 }
+#endif
+#if 0
 unsigned char CommandParserAudPollExtStereo(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
@@ -394,7 +378,7 @@ unsigned char CommandParserAudPollExtStereo(char *buffer,unsigned char size)
 
 	return 0;
 }
-
+#endif
 unsigned char CommandParserAudPoll4(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
@@ -464,82 +448,69 @@ unsigned char CommandParserAudPoll5(char *buffer,unsigned char size)
 
 unsigned char CommandParserAudReg(char *buffer,unsigned char size)
 {
+
 	(void)size; (void)buffer;
 
-	DFSDM_Channel_TypeDef *channels[8]={	DFSDM1_Channel0,DFSDM1_Channel1,DFSDM1_Channel2,DFSDM1_Channel3,
-											DFSDM1_Channel4,DFSDM1_Channel5,DFSDM1_Channel6,DFSDM1_Channel7};
-	for(int i=0;i<8;i++)
-	{
-		fprintf(file_pri,"Channel %d (%p)\n",i,channels[i]);
-		fprintf(file_pri,"\tCHCFGR1: %08X %s\n",(unsigned)channels[i]->CHCFGR1,dfsdm_chcfgr1(channels[i]->CHCFGR1));
-		fprintf(file_pri,"\tCHCFGR2: %08X %s\n",(unsigned)channels[i]->CHCFGR2,dfsdm_chcfgr2(channels[i]->CHCFGR2));
-		fprintf(file_pri,"\tCHAWSCDR: %08X\n",(unsigned)channels[i]->CHAWSCDR);
-		fprintf(file_pri,"\tCHWDATAR: %08X\n",(unsigned)channels[i]->CHWDATAR);
-		fprintf(file_pri,"\tCHDATINR: %08X\n",(unsigned)channels[i]->CHDATINR);
-	}
-
-	DFSDM_Filter_TypeDef *filters[4]={	DFSDM1_Filter0,DFSDM1_Filter1,DFSDM1_Filter2,DFSDM1_Filter3};
-	for(int i=0;i<4;i++)
-	{
-		fprintf(file_pri,"Filter %d (%p)\n",i,filters[i]);
-		fprintf(file_pri,"\tFLTCR1: %08X FLTCR2: %08X\n",(unsigned)filters[i]->FLTCR1,(unsigned)filters[i]->FLTCR2);
-		fprintf(file_pri,"\tFLTISR: %08X FLTICR: %08X\n",(unsigned)filters[i]->FLTISR,(unsigned)filters[i]->FLTICR);
-		fprintf(file_pri,"\tFLTJCHGR: %08X FLTFCR: %08X\n",(unsigned)filters[i]->FLTJCHGR,(unsigned)filters[i]->FLTFCR);
-		fprintf(file_pri,"\tFLTJDATAR: %08X FLTRDATAR: %08X\n",(unsigned)filters[i]->FLTJDATAR,(unsigned)filters[i]->FLTRDATAR);
-		fprintf(file_pri,"\tFLTAWHTR: %08X FLTAWLTR: %08X\n",(unsigned)filters[i]->FLTAWHTR,(unsigned)filters[i]->FLTAWLTR);
-		fprintf(file_pri,"\tFLTAWSR: %08X FLTAWCFR: %08X\n",(unsigned)filters[i]->FLTAWSR,(unsigned)filters[i]->FLTAWCFR);
-		fprintf(file_pri,"\tFLTEXMAX: %08X FLTEXMIN: %08X\n",(unsigned)filters[i]->FLTEXMAX,(unsigned)filters[i]->FLTEXMIN);
-		fprintf(file_pri,"\tFLTCNVTIMR: %08X\n",(unsigned)filters[i]->FLTCNVTIMR);
-	}
-
+	stm_dfsdm_printreg();
 
 	return 0;
 
 }
-unsigned char CommandParserAudInternalOffset(char *buffer,unsigned char size)
+unsigned char CommandParserAudOffsetInternalMeasure(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
+	int left_right;
 
-	// Stop DMA
-	stm_dfsdm_acquirdmaeoff();
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
 
-	// Start poll
-	HAL_DFSDM_FilterRegularStart(&hdfsdm1_filter0);			// filter 0 is internal mic filter
 
-	int offset = stm_dfsdm_calib_zero_internal();
+	_stm_dfsdm_offset_measure(left_right,0,0,1);
 
-	fprintf(file_pri,"Internal microphone measured offset: %d\n",offset);
 
 	return 0;
 }
-unsigned char CommandParserAudZeroCalibrate(char *buffer,unsigned char size)
+unsigned char CommandParserAudOffsetSet(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
-	// Stop DMA
-	stm_dfsdm_acquirdmaeoff();
+	int ol,or;
 
-	// Start poll
-	HAL_DFSDM_FilterRegularStart(&hdfsdm1_filter0);			// filter 0 is internal mic filter
+	if(ParseCommaGetInt(buffer,2,&ol,&or))
+		return 2;
 
-	int offset = stm_dfsdm_calib_zero_internal();
+	stm_dfsdm_offset_set(STM_DFSDM_LEFT,ol);
+	stm_dfsdm_offset_set(STM_DFSDM_RIGHT,or);
 
-	fprintf(file_pri,"Zero calibration offset: %d\n",offset);
-
-	HAL_StatusTypeDef s = HAL_DFSDM_ChannelModifyOffset(&hdfsdm1_channel5,offset);
-
-	fprintf(file_pri,"Cancelled offset of internal mic (%d)\n",s);
 
 	return 0;
 }
-unsigned char CommandParserAudZeroCalibrateClear(char *buffer,unsigned char size)
+unsigned char CommandParserAudOffsetAutoCalibrate(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
-	HAL_StatusTypeDef s = HAL_DFSDM_ChannelModifyOffset(&hdfsdm1_channel5,0);
+	int left_right;
 
-	fprintf(file_pri,"Cleared internal mic offset (%d)\n",s);
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+	_stm_dfsdm_offset_calibrate(left_right,1);
+
+	return 0;
+}
+unsigned char CommandParserAudOffsetClear(char *buffer,unsigned char size)
+{
+	(void)size; (void)buffer;
+
+	// Clear left&right
+	stm_dfsdm_offset_set(STM_DFSDM_STEREO,0);
+
+
 	return 0;
 }
 unsigned char CommandParserAudTest(char *buffer,unsigned char size)
@@ -550,101 +521,185 @@ unsigned char CommandParserAudTest(char *buffer,unsigned char size)
 
 	return 0;
 }
+/******************************************************************************
+	function: CommandParserAudPollStart
+*******************************************************************************
+	Start polling acquisition.
 
-unsigned char CommandParserAudDMA(char *buffer,unsigned char size)
+	parameter left_right mandatory
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudPollStart(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
-	// Stop polling if running
-	HAL_DFSDM_FilterRegularStop(&hdfsdm1_filter0);			// filter 0 is internal mic filter
+	int left_right;
 
-	stm_dfsdm_acquirdmaeon();
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+	stm_dfsdm_acquire_start_poll(left_right);		// This starts the left/right/stereo as appropriate
 
 	return 0;
 }
-unsigned char CommandParserAudDMAStop(char *buffer,unsigned char size)
+
+/******************************************************************************
+	function: CommandParserAudDMA
+*******************************************************************************
+	Start DMA acquisition.
+
+	parameter left_right mandatory
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudDMAStart(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
-	stm_dfsdm_acquirdmaeoff();
+	int left_right;
+
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+
+	stm_dfsdm_acquire_start_dma(left_right);		// This starts the left/right/stereo as appropriate
 
 	return 0;
-
 }
-unsigned char CommandParserAudDMAAcquireStat(char *buffer,unsigned char size)
+/******************************************************************************
+	function: CommandParserAudPollAcquire
+*******************************************************************************
+	Print data acquired by polling.
+
+	The command parameter left_right indicates which microphone to acquire.
+	The data is printed in single or two columns in mono and stereo respectively
+
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudPollPrint(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
 
-	STM_DFSMD_TYPE buf[STM_DFSMD_BUFFER_SIZE];
+	int left_right;
 
-	unsigned long timems,timeold=0,timestart=0;
-	unsigned long ctr=0;
-	unsigned long pkt;
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
 
-	fprintf(file_pri,"Audio data acquired via DMA. Press return to stop and print statistics.\n");
-	while(1)
+	unsigned maxsample=10000;
+	int data[maxsample];
+	unsigned long dt = stm_dfsdm_acq_poll_internal(left_right,data,maxsample);
+
+	int inc = 1;
+	if(left_right==STM_DFSDM_STEREO)	// In stereo data is interleaved
+		inc=2;
+
+	for(int i=0;i<maxsample;i+=inc)
 	{
-		if(!stm_dfsdm_data_getnext(buf,&timems,&pkt))
-		{
-			if(timestart==0)
-			{
-				timestart = timems;
-				ctr=0;
-			}
-			else
-				ctr++;
-
-			if((ctr%100)==0)
-			{
-				fprintf(file_pri,"timems: %lu. dt: %lu. level: %u. %lu ms for %lu frames. \n",timems,timems-timeold,(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
-				unsigned long long sps = (unsigned long long)(ctr*STM_DFSMD_BUFFER_SIZE)*1000/(timems-timestart);
-				fprintf(file_pri,"\tSample rate: %lu\n",(unsigned long)sps);
-
-			}
-
-			timeold=timems;
-		}
-
-		if(fgetc(file_pri)!=-1)
-			break;
+		if(left_right!=STM_DFSDM_STEREO)
+			fprintf(file_pri,"%d\n",data[i]);
+		else
+			fprintf(file_pri,"%d %d\n",data[i],data[i+1]);
 	}
+	unsigned long long sr = (unsigned long long)maxsample*1000000/dt;
+
+
+	fprintf(file_pri,"%% Acquisition time for %u samples: %lu us. Sample rate: %lu\n",maxsample,dt,(unsigned long)sr);
+
+
 
 	return 0;
 }
-unsigned char CommandParserAudDMAAcquire(char *buffer,unsigned char size)
+
+/******************************************************************************
+	function: CommandParserAudDMAAcquire
+*******************************************************************************
+	Print data acquired by DMA.
+
+	The parameter summary can be set to 1 to only print summary statistics.
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudDMAPrint(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
+
+	int downsample=1;
+	if(ParseCommaGetNumParam(buffer)>1)
+		return 2;
+	if(ParseCommaGetNumParam(buffer)>=1 && ParseCommaGetInt(buffer,1,&downsample))
+		return 2;
+	if(downsample<0)
+		return 2;
+
+	fprintf(file_pri,"Downsample: %d\n",downsample);
 
 	STM_DFSMD_TYPE buf[STM_DFSMD_BUFFER_SIZE];
 
 	unsigned long timems,timestart=0;
 	unsigned long ctr=0;
 	unsigned long pkt;
+	unsigned char left_right;
 
-	fprintf(file_pri,"Audio data acquired via DMA\n");
+	fprintf(file_pri,"Print %s audio data acquired via DMA. Press enter to stop.\n",(downsample==0)?"summary statistics of":"");
 	while(1)
 	{
-		if(!stm_dfsdm_data_getnext(buf,&timems,&pkt))
-		{
-			if(timestart==0)
-			{
-				timestart = timems;
-				ctr=0;
-			}
-			else
-				ctr++;
-
-			for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i+=2)
-				//fprintf(file_pri,"%10d %08X\n ",buf[i],buf[i]);
-				//fprintf(file_pri,"%d\n",buf[i]>>8);				// Print data without channel
-				fprintf(file_pri,"%d\n",buf[i]);
-		}
-
-		if(fgetc(file_pri)!=-1)
+		if(fischar(file_pri))		// Faster than fgetc (fgets is ~30uS/call)
 			break;
+		if(stm_dfsdm_data_getnext(buf,&timems,&pkt,&left_right))
+		{
+			continue;
+		}
+		// Counter starting with the first frame
+		if(timestart==0)
+		{
+			timestart = timems;
+			ctr=0;
+		}
+		else
+			ctr++;
+
+		if(downsample!=0)
+		{
+			// Print the received data
+			fprintf(file_pri,"%lu %lu %u ",timems,pkt,(unsigned)left_right);
+			for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i+=downsample)		// Downsampled for speed reasons
+				fprintf(file_pri,"%d ",buf[i]);
+			fprintf(file_pri,"\n");
+		}
+		else
+		{
+			if((ctr%100)==0)
+			{
+				fprintf(file_pri,"After frame %lu: timems: %lu. buffer level: %u. time from start: %lu ms.\n",ctr,timems,(unsigned)stm_dfsdm_data_level(),timems-timestart);
+				unsigned long long sps = (unsigned long long)(ctr*STM_DFSMD_BUFFER_SIZE)*1000/(timems-timestart);
+				fprintf(file_pri,"\tTotal frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+				fprintf(file_pri,"\tSample rate: %lu\n",(unsigned long)sps);
+
+			}
+		}
 	}
 
-	fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+	fprintf(file_pri,"level: %u. %lu ms for %lu frames.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
 	fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
 	unsigned long long sps = (unsigned long long)(ctr*STM_DFSMD_BUFFER_SIZE)*1000/(timems-timestart);
 	fprintf(file_pri,"\tSample rate: %lu\n",(unsigned long)sps);
@@ -652,7 +707,21 @@ unsigned char CommandParserAudDMAAcquire(char *buffer,unsigned char size)
 	return 0;
 }
 
+/******************************************************************************
+	function: CommandParserAudLog
+*******************************************************************************
+	Log data acquired via DMA.
 
+	Command line: lognum
+
+	Data is stored in 2 column format (stereo) regardless of whether the data
+	is acquired in mono or stereo.
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
 unsigned char CommandParserAudLog(char *buffer,unsigned char size)
 {
 	(void)size;
@@ -668,46 +737,93 @@ unsigned char CommandParserAudLog(char *buffer,unsigned char size)
 		return 1;
 	}
 
-	STM_DFSMD_TYPE buf[STM_DFSMD_BUFFER_SIZE];
+	// Handle stereo
+	STM_DFSMD_TYPE buf[2][STM_DFSMD_BUFFER_SIZE],c_buf[STM_DFSMD_BUFFER_SIZE];
+	memset(buf,0,sizeof(buf));
+
+
+
 
 	unsigned long timems,timestart=0;
 	unsigned long ctr=0;
-	unsigned long pkt;
+	unsigned long c_pkt=0,p_pkt=0;		// Current and previous packet counter - used to commit frames to log
+	unsigned char c_lr;
 
 	// Clear buffers
 	stm_dfsdm_data_clear();
 
-	fprintf(file_pri,"Audio data acquired via DMA and stored to log %d. Press return to stop\n",lognum);
+	fprintf(file_pri,"Logging DMA-sampled data to log %d. Press return to stop\n",lognum);
+
+	//fprintf(file_pri,"%d %d\n",sizeof(buf),sizeof(c_buf));
+
+	// Print in two column format when using the stereo mode
+
 	while(1)
 	{
-		if(!stm_dfsdm_data_getnext(buf,&timems,&pkt))
+		// Check if interruption
+		if(fischar(file_pri))		// Faster than fgetc (fgets is ~30uS/call)
+			break;
+		// Get data with "current packet" and "current lr" in "current buf"
+		if(stm_dfsdm_data_getnext(c_buf,&timems,&c_pkt,&c_lr))
 		{
-			if(timestart==0)
-			{
-				timestart = timems;
-				ctr=0;
-			}
-			else
-				ctr++;
-
-			for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
-			{
-				//fprintf(file_pri,"%10d %08X\n ",buf[i],buf[i]);
-				//fprintf(file_pri,"%d\n",buf[i]>>8);
-				//fprintf(mode_sample_file_log,"%d\n",buf[i]>>8);
-				//fprintf(mode_sample_file_log,"%d\n",buf[i]);
-				//fprintf(mode_sample_file_log,"0000000\n");
-				// Faster via s16toa
-				char strbuf[8];
-				s16toa(buf[i],strbuf);
-				strbuf[7]='\n';
-				fwrite(strbuf,1,8,mode_sample_file_log);
-				//fprintf(mode_sample_file_log,"%d\n",buf[i]);
-			}
+			continue;
 		}
 
-		if(fgetc(file_pri)!=-1)
+		// Initialise the timing/counters upon reception of the first data
+		if(timestart==0)
+		{
+			timestart = timems;
+			ctr=0;
+			p_pkt = c_pkt;
+		}
+		else
+			ctr++;
+
+		//fprintf(file_pri,"%d %d %d\n",c_lr,c_pkt,p_pkt);
+
+
+		// Sanity check on L/R
+		if(c_lr<0 || c_lr>1)
+		{
+			fprintf(file_pri,"Unexpected L/R channels\n");
 			break;
+		}
+
+
+
+		// Move the data to the appropriate buffer
+		memcpy(buf[c_lr],c_buf,sizeof(c_buf));
+
+		// Current packet identical to previous: nothing to commit yet.
+		if(c_pkt==p_pkt)
+			continue;
+
+		if((c_pkt%100)==0)
+		{
+			fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+			fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+		}
+
+		//fprintf(file_pri,"commit\n");
+
+		// Commit data
+		// As multiple calls to fwrite are slow, assemble the data in a buffer and call fwrite once
+		char strbuf[STM_DFSMD_BUFFER_SIZE*14];		// One sample: 14 bytes
+		for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
+		{
+			// Faster via s16toa
+			s16toa(buf[0][i],strbuf+i*14);
+			strbuf[i*14+6]=' ';
+			s16toa(buf[1][i],strbuf+i*14+7);
+			strbuf[i*14+13]='\n';
+		}
+		fwrite(strbuf,1,STM_DFSMD_BUFFER_SIZE*14,mode_sample_file_log);
+
+		// Update the previous packet counter
+		p_pkt = c_pkt;
+		// Clear buffers
+		memset(buf,0,sizeof(buf));
+
 	}
 
 	ufat_log_close();
@@ -719,47 +835,394 @@ unsigned char CommandParserAudLog(char *buffer,unsigned char size)
 
 	return 0;
 }
+/******************************************************************************
+	function: CommandParserAudDMAPrintStereo
+*******************************************************************************
+	Log data acquired via DMA.
 
-unsigned char CommandParserAudInit(char *buffer,unsigned char size)
+	Command line: downsample
+
+	Data is stored in 2 column format (stereo) regardless of whether the data
+	is acquired in mono or stereo.
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudDMAPrintStereo(char *buffer,unsigned char size)
 {
-	(void)size;
+	(void)size; (void) size;
 
-	unsigned mode=STM_DFSMD_INIT_16K;
 
-	if(ParseCommaGetInt(buffer,1,&mode))
+	unsigned t1 = timer_ms_get();
+	unsigned c = 10000;
+	for(int i=0;i<c;i++)
+		fgetc(file_pri);
+	unsigned t2 = timer_ms_get();
+	fprintf(file_pri,"%u in %u ms\n",c,t2-t1);
+
+	HAL_Delay(500);
+
+
+	/*
+	// Keypress to quit - faster than parsing user commands.
+				if(fischar(file_pri))		// Faster than fgetc
+					break;*/
+
+	int downsample;
+
+	if(!ParseCommaGetInt(buffer,1,&downsample))
 	{
-		stm_dfsdm_printmodes(file_pri);
+		// Parse successful: check validity
+		if(downsample<1)
+			return 2;
 	}
 	else
 	{
-		if(mode<0 || mode>STM_DFSMD_INIT_48K)
-		{
-			return 2;
-		}
-		stm_dfsdm_init(mode);
+		// Default downsample
+		downsample=1;
 	}
+
+
+	// Handle stereo
+	STM_DFSMD_TYPE buf[2][STM_DFSMD_BUFFER_SIZE],c_buf[STM_DFSMD_BUFFER_SIZE];
+	memset(buf,0,sizeof(buf));
+
+	unsigned long timems,timestart=0;
+	unsigned long ctr=0;
+	unsigned long err=0;
+	unsigned long c_pkt=0,p_pkt=0;		// Current and previous packet counter - used to commit frames to log
+	unsigned char c_lr;
+
+	// Clear buffers
+	stm_dfsdm_data_clear();
+
+	fprintf(file_pri,"Streaming DMA-sampled data. Press return to stop\n");
+
+
+	// Print in two column format when using the stereo mode
+
+	while(1)
+	{
+		// Check if interruption
+		if(fischar(file_pri))		// Faster than fgetc (fgets is ~30uS/call)
+			break;
+		// Get data with "current packet" and "current lr" in "current buf"
+		if(stm_dfsdm_data_getnext(c_buf,&timems,&c_pkt,&c_lr))
+		{
+			continue;
+		}
+
+		// Initialise the timing/counters upon reception of the first data
+		if(timestart==0)
+		{
+			timestart = timems;
+			ctr=0;
+			p_pkt = c_pkt;
+		}
+		else
+			ctr++;
+
+		//fprintf(file_pri,"%d %d %d\n",c_lr,c_pkt,p_pkt);
+
+
+		// Sanity check on L/R
+		if(c_lr<0 || c_lr>1)
+		{
+			fprintf(file_pri,"Unexpected L/R channels\n");
+			break;
+		}
+
+
+
+		// Move the data to the appropriate buffer
+		memcpy(buf[c_lr],c_buf,sizeof(c_buf));
+
+		// Current packet identical to previous: nothing to commit yet.
+		if(c_pkt==p_pkt)
+			continue;
+
+		if((c_pkt%100)==0)
+		{
+			fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+			fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+		}
+
+		for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i+=downsample)
+		{
+			// Faster via s16toa
+			char strbuf[32];
+			s16toa(buf[0][i],strbuf);
+			strbuf[6]=' ';
+			s16toa(buf[1][i],strbuf+7);
+			strbuf[13]='\n';
+			strbuf[14]=0;
+			//fwrite(strbuf,1,14,file_pri);
+			fputs(strbuf,file_pri);
+			//err += fputbuf(file_pri,strbuf,14);
+		}
+
+		// Update the previous packet counter
+		p_pkt = c_pkt;
+		// Clear buffers
+		memset(buf,0,sizeof(buf));
+
+	}
+
+	fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+	fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+	fprintf(file_pri,"Samples not transmitted: %lu\n",err);
+	unsigned long long sps = (unsigned long long)(ctr*STM_DFSMD_BUFFER_SIZE)*1000/(timems-timestart);
+	fprintf(file_pri,"\tSample rate: %lu\n",(unsigned long)sps);
+
+	return 0;
+}
+unsigned char CommandParserAudDMAPrintStereoBin(char *buffer,unsigned char size)
+{
+	(void)size; (void) size;
+
+
+	unsigned t1 = timer_ms_get();
+	unsigned c = 10000;
+	for(int i=0;i<c;i++)
+		fgetc(file_pri);
+	unsigned t2 = timer_ms_get();
+	fprintf(file_pri,"%u in %u ms\n",c,t2-t1);
+
+	HAL_Delay(500);
+
+
+	/*
+	// Keypress to quit - faster than parsing user commands.
+				if(fischar(file_pri))		// Faster than fgetc
+					break;*/
+
+	int downsample;
+
+	if(!ParseCommaGetInt(buffer,1,&downsample))
+	{
+		// Parse successful: check validity
+		if(downsample<1)
+			return 2;
+	}
+	else
+	{
+		// Default downsample
+		downsample=1;
+	}
+
+
+	// Handle stereo
+	STM_DFSMD_TYPE buf[2][STM_DFSMD_BUFFER_SIZE],c_buf[STM_DFSMD_BUFFER_SIZE];
+	memset(buf,0,sizeof(buf));
+
+	unsigned long timems,timestart=0;
+	unsigned long ctr=0;
+	unsigned long err=0;
+	unsigned long c_pkt=0,p_pkt=0;		// Current and previous packet counter - used to commit frames to log
+	unsigned char c_lr;
+
+	// Clear buffers
+	stm_dfsdm_data_clear();
+
+	fprintf(file_pri,"Binary streaming DMA-sampled data. Press return to stop\n");
+
+
+	// Print in two column format when using the stereo mode
+
+	while(1)
+	{
+		// Check if interruption
+		if(fischar(file_pri))		// Faster than fgetc (fgets is ~30uS/call)
+			break;
+		// Get data with "current packet" and "current lr" in "current buf"
+		if(stm_dfsdm_data_getnext(c_buf,&timems,&c_pkt,&c_lr))
+		{
+			continue;
+		}
+
+		// Initialise the timing/counters upon reception of the first data
+		if(timestart==0)
+		{
+			timestart = timems;
+			ctr=0;
+			p_pkt = c_pkt;
+		}
+		else
+			ctr++;
+
+		//fprintf(file_pri,"%d %d %d\n",c_lr,c_pkt,p_pkt);
+
+
+		// Sanity check on L/R
+		if(c_lr<0 || c_lr>1)
+		{
+			fprintf(file_pri,"Unexpected L/R channels\n");
+			break;
+		}
+
+
+
+		// Move the data to the appropriate buffer
+		memcpy(buf[c_lr],c_buf,sizeof(c_buf));
+
+		// Current packet identical to previous: nothing to commit yet.
+		if(c_pkt==p_pkt)
+			continue;
+
+		if((c_pkt%100)==0)
+		{
+			fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+			fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+		}
+
+		for(int i=0;i<STM_DFSMD_BUFFER_SIZE;i+=downsample)
+		{
+			unsigned char packet[32];
+			unsigned short d;
+			int dl;
+
+
+
+			packet[0]='D'; // (ascii=156d, msb=1)
+
+			int o=1;
+
+			// Binary format has only 30-bit resolution to have a unique frame header and hack the LSB to avoid the header in the data stream.
+			dl = buf[0][i];
+			dl+=32768;				// Shift to positive only range
+			dl>>=2;					// Clear two MSB bits, decrease resolution by 2 bit
+			d=(unsigned short)dl;	// Convert to unsigned
+			packet[o+0]=d>>8;
+			packet[o+1]=d&0xff;
+			if(packet[o+1] == 'D')
+				packet[o+1]--;
+
+			dl = buf[1][i];
+			dl+=32768;				// Shift to positive only range
+			dl>>=2;					// Clear two MSB bits, decrease resolution by 2 bit
+			d=(unsigned short)dl;	// Convert to unsigned
+			packet[o+2]=d>>8;
+			packet[o+3]=d&0xff;
+			if(packet[o+3] == 'D')
+				packet[o+3]--;
+
+			err += fputbuf(file_pri,(char*)packet,5);
+
+
+		}
+
+		// Update the previous packet counter
+		p_pkt = c_pkt;
+		// Clear buffers
+		memset(buf,0,sizeof(buf));
+
+	}
+
+	fprintf(file_pri,"level: %u. %lu ms for %lu buffers.\n",(unsigned)stm_dfsdm_data_level(),timems-timestart,ctr);
+	fprintf(file_pri,"Total frames: %lu of which lost: %lu\n",stm_dfsdm_stat_totframes(),stm_dfsdm_stat_lostframes());
+	fprintf(file_pri,"Samples not transmitted: %lu\n",err);
+	unsigned long long sps = (unsigned long long)(ctr*STM_DFSMD_BUFFER_SIZE)*1000/(timems-timestart);
+	fprintf(file_pri,"\tSample rate: %lu\n",(unsigned long)sps);
+
+	return 0;
+}
+
+unsigned char CommandParserAudInitStartDMA(char *buffer,unsigned char size)
+{
+	(void)size;
+
+	int mode=STM_DFSMD_INIT_16K;
+	int left_right;
+	unsigned char np = ParseCommaGetNumParam(buffer);
+
+
+	if( !(np==0 || np==2) )		// 0 or 2 parameters are ok - nothing else.
+		return 2;
+
+
+	if(ParseCommaGetInt(buffer,2,&mode,&left_right))
+	{
+		stm_dfsdm_printmodes(file_pri);
+		return 2;
+	}
+
+	if(mode<0 || mode>STM_DFSMD_INIT_MAXMODES)
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+	// High-level initialisation, zeroing, and start acquisition
+	stm_dfsdm_init(mode,left_right);
+
+	return 0;
+
+}
+/******************************************************************************
+	function: CommandParserAudInitOnly
+*******************************************************************************
+	Initialises the data acquisition with one of the predefined acquisiiton modes.
+
+	Does not start polling or DMA acquisition.
+
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
+unsigned char CommandParserAudInitOnly(char *buffer,unsigned char size)
+{
+	(void)size;
+
+	int mode=STM_DFSMD_INIT_16K;
+	int left_right;
+	unsigned char np = ParseCommaGetNumParam(buffer);
+
+
+	if( !(np==0 || np==2) )		// 0 or 2 parameters are ok - nothing else.
+		return 2;
+
+
+	if(ParseCommaGetInt(buffer,2,&mode,&left_right))
+	{
+		stm_dfsdm_printmodes(file_pri);
+		return 2;
+	}
+
+	if(mode<0 || mode>STM_DFSMD_INIT_MAXMODES)
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+	// Low-level initialisation only
+	_stm_dfsdm_init_predef(mode,left_right);
+
 	return 0;
 
 }
 
-
-unsigned char CommandParserAudInitDetailed(char *buffer,unsigned char size)
+unsigned char CommandParserAudInitOnlyDetailed(char *buffer,unsigned char size)
 {
 	(void)size;
 
-	unsigned order,fosr,iosr,div,rightshift;
+	unsigned order,fosr,iosr,div,rightshift,left_right;
 
-	if(ParseCommaGetInt(buffer,5,&order,&fosr,&iosr,&div,&rightshift))
+	if(ParseCommaGetInt(buffer,6,&order,&fosr,&iosr,&div,&rightshift,&left_right))
 		return 2;
 	if(order<1 || order>5)
 	{
 		fprintf(file_pri,"Order must be e[1;5]\n");
 		return 2;
 	}
+	if(left_right<0 || left_right>2)
+		return 2;
 
-	fprintf(file_pri,"Init with sinc order %d filter oversampling %d, integrator oversampling %d, clock divider %d, rightshift %d\n",order,fosr,iosr,div,rightshift);
-	stm_dfsdm_initsampling(order,fosr,iosr,div);
+	fprintf(file_pri,"Init with sinc order %d filter oversampling %d, integrator oversampling %d, clock divider %d, rightshift %d left_right: %d\n",order,fosr,iosr,div,rightshift,left_right);
+	stm_dfsdm_initsampling(left_right,order,fosr,iosr,div);
 	_stm_dfsdm_rightshift=rightshift;
+
+	stm_dfsdm_rightshift_set(left_right,_stm_dfsdm_rightshift);
 
 
 
@@ -774,24 +1237,27 @@ unsigned char CommandParserAudBench(char *buffer,unsigned char size)
 	//unsigned long int mintime=10;
 	unsigned long int mintime=1;
 
-	stm_dfsdm_init(STM_DFSMD_INIT_OFF);
+	stm_dfsdm_init(STM_DFSMD_INIT_OFF,0);
 	unsigned long p = stm_dfsmd_perfbench_withreadout(mintime);
 	refperf=p;
-	fprintf(file_pri,"Reference performance: %lu\n",p);
+	fprintf(file_pri,"\n\n=== Reference performance: %lu ===\n\n\n",p);
 
-	for(int mode = 0; mode<=3; mode++)
+	for(int channel=0;channel<3;channel+=2)		// Loops 0 (left) and 2 (stereo)
 	{
-		stm_dfsdm_init(mode);
+		for(int mode = 0; mode<=STM_DFSMD_INIT_MAXMODES; mode++)
+		{
+			stm_dfsdm_init(mode,channel);
 
-		perf = stm_dfsmd_perfbench_withreadout(mintime);
+			perf = stm_dfsmd_perfbench_withreadout(mintime);
 
-		stm_dfsdm_init(STM_DFSMD_INIT_OFF);
+			stm_dfsdm_init(STM_DFSMD_INIT_OFF,0);
 
-		long load = 100-(perf*100/refperf);
-		if(load<0)
-			load=0;
+			long load = 100-(perf*100/refperf);
+			if(load<0)
+				load=0;
 
-		fprintf(file_pri,"\tMode %d: perf: %lu (instead of %lu). CPU load %lu %%\n",mode,perf,refperf,load);
+			fprintf(file_pri,"\n\t === Mode %d channel %s: perf: %lu (instead of %lu). CPU load %lu %% ===\n\n",mode,channel==0?"left":"stereo",perf,refperf,load);
+		}
 	}
 
 
@@ -802,6 +1268,7 @@ unsigned char CommandParserAudBench(char *buffer,unsigned char size)
 
 	return 0;
 }
+#if 0
 unsigned char CommandParserAudFFT(char *buffer,unsigned char size)
 {
 	(void)size; (void) buffer;
@@ -810,4 +1277,56 @@ unsigned char CommandParserAudFFT(char *buffer,unsigned char size)
 
 	return 0;
 }
+#endif
 
+unsigned char CommandParserAudNothing(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	fprintf(file_pri,"Not implemented\n");
+
+	return 0;
+}
+unsigned char CommandParserAudStatPrint(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	stm_dfsdm_stat_print();
+
+	return 0;
+}
+unsigned char CommandParserAudStatClear(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	stm_dfsdm_stat_clear();
+
+	return 0;
+}
+
+unsigned char CommandParserAudStatus(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	stm_dfsdm_state_print();
+
+	return 0;
+}
+
+
+
+unsigned char CommandParserAudRightshift(char *buffer,unsigned char size)
+{
+	(void)size; (void)buffer;
+
+	int l,r;
+
+	if(ParseCommaGetInt(buffer,2,&l,&r))
+		return 2;
+
+	stm_dfsdm_rightshift_set(STM_DFSDM_LEFT,l);
+	stm_dfsdm_rightshift_set(STM_DFSDM_RIGHT,r);
+
+	return 0;
+
+}

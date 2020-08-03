@@ -63,7 +63,8 @@ void mode_sample_sound(void)
 {
 	int putbufrv;
 	STM_DFSMD_TYPE audbuf[STM_DFSMD_BUFFER_SIZE];		// Buffer for audio data
-	unsigned long audbufms,audbufpkt;
+	unsigned long audbufms,audbufpkt;				// Audio metadata
+	unsigned char audleftright;						// Audio metadata: left or right mic
 
 	fprintf(file_pri,"SMPLSOUND>\n");
 
@@ -76,7 +77,7 @@ void mode_sample_sound(void)
 	// Load
 	stream_load_persistent_frame_settings();
 	// Set audio mode
-	stm_dfsdm_init(mode_sample_sound_param_mode);
+	stm_dfsdm_init(mode_sample_sound_param_mode,STM_DFSDM_LEFT);
 
 	// Clear sample statistics
 	mode_sample_clearstat();
@@ -125,14 +126,14 @@ void mode_sample_sound(void)
 	} // End sample loop
 
 	// Stop acquiring data
-	stm_dfsdm_init(STM_DFSMD_INIT_OFF);
+	stm_dfsdm_init(STM_DFSMD_INIT_OFF,0);
 
 	// Stop the logging, if logging was ongoing
 	mode_sample_logend();
 
 
 	// Print STM statistics
-	stm_dfsdm_data_printstat();
+	stm_dfsdm_stat_print();
 
 	stream_sound_status(file_pri,0);
 
