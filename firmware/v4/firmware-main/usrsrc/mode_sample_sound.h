@@ -22,7 +22,7 @@ Relies on:
 												unsigned maxctr=0;	\
 												while(!stm_dfsdm_data_getnext(audbuf,&audbufms,&audbufpkt,&audleftright) && (maxctr++<100))	\
 												{	\
-													putbufrv = audio_stream_sample(audbuf,audbufms,audbufpkt,file_stream);	\
+													putbufrv = audio_stream_sample(audbuf,audbufms,audbufpkt,audleftright,file_stream);	\
 													if(putbufrv)	\
 														stat_snd_samplesendfailed+=putbufrv;			\
 													else	\
@@ -43,11 +43,11 @@ void mode_sample_sound(void);
 void mode_sample_sound_setparam(unsigned char mode,unsigned char framebased, int logfile, int duration);
 char *audio_stream_format_metadata_text(char *strptr,unsigned long time,unsigned long pkt);
 void audio_stream_format_metadata_bin(PACKET *p,unsigned long time,unsigned long pkt);
-int audio_stream_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
-int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
-int audio_stream_sample_text_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
-int audio_stream_sample_bin_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
-int audio_stream_sample_bin_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
+int audio_stream_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f);
+int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f);
+//int audio_stream_sample_text_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
+int audio_stream_sample_bin_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f);
+//int audio_stream_sample_bin_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f);
 void stream_sound_status(FILE *f,unsigned char bin);
 
 

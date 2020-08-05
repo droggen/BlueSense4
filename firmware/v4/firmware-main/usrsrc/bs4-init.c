@@ -294,10 +294,11 @@ toto1:
 
 #endif
 
+#if 1
 	// Init audio
 	//stm_dfsdm_init(STM_DFSMD_INIT_16K);
 	stm_dfsdm_init(STM_DFSMD_INIT_OFF,STM_DFSDM_STEREO);
-
+#endif
 
 
 	// Init the various interrupts

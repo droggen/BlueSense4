@@ -145,7 +145,7 @@ void mode_sample_multimodal(void)
 	//unsigned long stat_timems_end=0;
 	int putbufrv;
 
-	mode_sample_sound_param_framebased=1;			// Sound must be frame-based always
+	//mode_sample_sound_param_framebased=1;			// Sound must be frame-based always
 
 
 	fprintf(file_pri,"SMPMULTIMODAL>\n");

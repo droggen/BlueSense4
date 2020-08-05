@@ -73,6 +73,12 @@ TODO:
 
 3. Instead of software rightshift use hardware right shift
 
+4. getnext frame:
+Instead of returning mono frames try to return stereo frame:
+- assumes left/right frames alternate in circular buffer
+- return immediately if there are not at least 2 frames in circular buffer
+- if two frames, check if both are identical packet counter: if yes -> stereo and returned combined. If not
+
 
 DFSDM_Channel_InitTypeDef.RightBitShift: DFSDM channel right bit shift. This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x1F
 Configure the output clock, input, serial interface, analog watchdog, offset and data right bit shift parameters for this channel using the HAL_DFSDM_ChannelInit() function.
@@ -107,7 +113,7 @@ const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 	"8 KHz (8003Hz)",
 	"16 KHz (16181Hz)",
 	"20 KHz (20080Hz)",
-	"24 KHz (poor quality; overrun in stereo)",
+	//"24 KHz (poor quality; overrun in stereo)",
 	/*"32 KHz",
 	"48 KHz",*/
 };
@@ -140,11 +146,6 @@ void stm_dfsdm_init(unsigned mode,unsigned char left_right)
 
 	fprintf(file_pri,"Audio initialisation. Memory used: %u bytes\n",stm_dfsdm_memoryused());
 
-	/*fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers));
-	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_time));
-	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_pktnum));
-	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf));
-	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf2));*/
 
 
 
@@ -187,11 +188,12 @@ void stm_dfsdm_init(unsigned mode,unsigned char left_right)
 	// Stop polling sampling
 	stm_dfsdm_acquire_stop_poll();
 
-	// Reset sampling buffers and statistics before starting
-	stm_dfsdm_data_clear();
-
-	// Start sampling
+	// Start sampling (also clears stats)
 	stm_dfsdm_acquire_start_dma(left_right);
+
+
+	// This tentatively aims to synchronise the channels; but it does not seem necessary.
+	//_stm_dfsdm_sampling_sync();
 
 
 	(void) s;
@@ -474,10 +476,10 @@ void stm_dfsdm_rightshift_set(unsigned char left_right,int shift)
 		// Left is channel 5
 		// Must disable channel to change shift
 		r = DFSDM1_Channel5->CHCFGR1;
-		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
 		r&=~(0b10000000);
 		DFSDM1_Channel5->CHCFGR1=r;
-		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
 
 		//unsigned r = DFSDM_CH5CFGR2;
 		r = DFSDM1_Channel5->CHCFGR2;
@@ -487,27 +489,27 @@ void stm_dfsdm_rightshift_set(unsigned char left_right,int shift)
 		r|=shift<<3;
 		// Update reg
 		DFSDM1_Channel5->CHCFGR2 = r;
-		char * s = dfsdm_chcfgr2(r);
-		fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
-		s = dfsdm_chcfgr2(DFSDM1_Channel5->CHCFGR2);
-		fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel5->CHCFGR2,s);
+		//char * s = dfsdm_chcfgr2(r);
+		//fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
+		//s = dfsdm_chcfgr2(DFSDM1_Channel5->CHCFGR2);
+		//fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel5->CHCFGR2,s);
 
 		// Reactivate channel
 		r = DFSDM1_Channel5->CHCFGR1;
-		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel5->CHCFGR1);
 		r|=0b10000000;
 		DFSDM1_Channel5->CHCFGR1=r;
-		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel5->CHCFGR1);
 	}
 	if(left_right==STM_DFSDM_RIGHT|| left_right==STM_DFSDM_STEREO)
 	{
 		// Left is channel 6
 		// Must disable channel to change shift
 		r = DFSDM1_Channel6->CHCFGR1;
-		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
 		r&=~(0b10000000);
 		DFSDM1_Channel6->CHCFGR1=r;
-		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
 
 		r = DFSDM1_Channel6->CHCFGR2;
 		// Preserve offset
@@ -516,17 +518,17 @@ void stm_dfsdm_rightshift_set(unsigned char left_right,int shift)
 		r|=shift<<3;
 		// Update reg
 		DFSDM1_Channel6->CHCFGR2 = r;
-		char * s = dfsdm_chcfgr2(r);
-		fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
-		s = dfsdm_chcfgr2(DFSDM1_Channel6->CHCFGR2);
-		fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel6->CHCFGR2,s);
+		//char * s = dfsdm_chcfgr2(r);
+		//fprintf(file_pri,"Setting CHCFGR2: %08X %s\n",r,s);
+		//s = dfsdm_chcfgr2(DFSDM1_Channel6->CHCFGR2);
+		//fprintf(file_pri,"Verifying CHCFGR2: %08X %s\n",DFSDM1_Channel6->CHCFGR2,s);
 
 		// Reactivate channel
 		r = DFSDM1_Channel6->CHCFGR1;
-		fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR1 Before: %08X\n",DFSDM1_Channel6->CHCFGR1);
 		r|=0b10000000;
 		DFSDM1_Channel6->CHCFGR1=r;
-		fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
+		//fprintf(file_pri,"CHCFGR After: %08X\n",DFSDM1_Channel6->CHCFGR1);
 	}
 }
 /******************************************************************************
@@ -559,8 +561,8 @@ void stm_dfsdm_initsampling(unsigned char left_right,unsigned order,unsigned fos
 
 	fprintf(file_pri,"\tFilter order %d; oversampling ratio: %d; integral oversampling: %d; system clock divider: %d\n",order,fosr,iosr,div);
 
-	fprintf(file_pri,"====================BEFORE OFF====================\n");
-	stm_dfsdm_printreg();
+	/*fprintf(file_pri,"====================BEFORE OFF====================\n");
+	stm_dfsdm_printreg();*/
 
 
 	// Stop continuous conversion
@@ -575,22 +577,23 @@ void stm_dfsdm_initsampling(unsigned char left_right,unsigned order,unsigned fos
 		fprintf(file_pri,"Error stopping regular conversion right. %d\n",s);
 	}
 
-	fprintf(file_pri,"====================AFTER OFF====================\n");
-	stm_dfsdm_printreg();
+	/*fprintf(file_pri,"====================AFTER OFF====================\n");
+	stm_dfsdm_printreg();*/
 
 	// Initialise the left or right
 	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
 	{
 		_stm_dfsdm_initsampling_internal(STM_DFSDM_LEFT,order,fosr,iosr,div);
 	}
+
 	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
 	{
 		_stm_dfsdm_initsampling_internal(STM_DFSDM_RIGHT,order,fosr,iosr,div);
 	}
 
 
-	fprintf(file_pri,"====================AFTER INIT====================\n");
-	stm_dfsdm_printreg();
+	/*fprintf(file_pri,"====================AFTER INIT====================\n");
+	stm_dfsdm_printreg();*/
 
 
 
@@ -653,7 +656,11 @@ void _stm_dfsdm_initsampling_internal(unsigned char left_right,unsigned order,un
 		filter->Instance = DFSDM1_Filter0;					// DAN 27.07.2020 - is this needed? MX_DFSDM1_Init already does this
 	if(left_right==STM_DFSDM_RIGHT)
 		filter->Instance = DFSDM1_Filter1;					// DAN 27.07.2020 - is this needed? MX_DFSDM1_Init already does this
-	filter->Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
+	if(left_right==STM_DFSDM_LEFT)
+		filter->Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
+	else
+		//filter->Init.RegularParam.Trigger = DFSDM_FILTER_SYNC_TRIGGER;		// Does not work
+		filter->Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
 	filter->Init.RegularParam.FastMode = DISABLE;
 	filter->Init.RegularParam.DmaMode = ENABLE;
 	switch(order)
@@ -822,29 +829,33 @@ unsigned long stm_dfsdm_acq_poll_internal(unsigned char left_right,int *buffer,u
 
 	unsigned long t1 = timer_us_get();
 	HAL_StatusTypeDef s;
+	unsigned timeout = 10;
 
 	unsigned inc=1;							// Increment for loop
 	if(left_right==STM_DFSDM_STEREO)		// Stereo mode - acquire half the samples
 		inc=2;
+
+	// Clear buffer
+	memset(buffer,0x55,n*sizeof(int));
 
 	for(unsigned i=0;i<n;i+=inc)
 	{
 		// Poll until conversion is complete on both channels
 		if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
 		{
-			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_LEFT],1000);
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_LEFT],timeout);
 			if(s!=HAL_OK)
 			{
-				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: left: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
 				return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
 			}
 		}
 		if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
 		{
-			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_RIGHT],1000);
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_RIGHT],timeout);
 			if(s!=HAL_OK)
 			{
-				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: right: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
 				return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
 			}
 		}
@@ -864,6 +875,79 @@ unsigned long stm_dfsdm_acq_poll_internal(unsigned char left_right,int *buffer,u
 				buffer[i] = v;
 			else
 				buffer[i+1] = v;
+		}
+	}
+	unsigned long t2 = timer_us_get();
+	return t2-t1;
+}
+unsigned long stm_dfsdm_acq_poll_internal_t(unsigned char left_right,int *buffer,unsigned *buffert,unsigned n)
+{
+	//fprintf(file_pri,"stm_dfsdm_acq_poll_internal left_right %d buffer %p n: %d\n",left_right,buffer,n);
+
+	unsigned long t1 = timer_us_get();
+	HAL_StatusTypeDef s;
+	unsigned timeout = 10;
+
+	unsigned inc=1;							// Increment for loop
+	if(left_right==STM_DFSDM_STEREO)		// Stereo mode - acquire half the samples
+		inc=2;
+
+	// Clear buffer
+	memset(buffer,0x55,n*sizeof(int));
+	memset(buffert,0x55,n*sizeof(unsigned));
+
+	for(unsigned i=0;i<n;i+=inc)
+	{
+		// Poll until conversion is complete on both channels
+		if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+		{
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_LEFT],timeout);
+			if(s!=HAL_OK)
+			{
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: left: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				//return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
+			}
+
+		}
+		if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+		{
+			s = HAL_DFSDM_FilterPollForRegConversion(_stm_dfsdm_filters[STM_DFSDM_RIGHT],timeout);
+			if(s!=HAL_OK)
+			{
+				fprintf(file_pri,"stm_dfsdm_acq_poll_internal: right: HAL_DFSDM_FilterPollForRegConversion error %d\n",s);
+				//return 0;	// In case of error return instead of trying to acquire the next samples which will also fail
+			}
+
+		}
+
+
+
+		if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
+		{
+			unsigned int c;
+			int v = HAL_DFSDM_FilterGetRegularValue(_stm_dfsdm_filters[STM_DFSDM_LEFT],(uint32_t*)&c);
+			buffer[i] = v;
+
+			unsigned t = HAL_DFSDM_FilterGetConvTimeValue(_stm_dfsdm_filters[STM_DFSDM_LEFT]);
+			//fprintf(file_pri,"%08X\n",t);
+			buffert[i] = t;
+
+		}
+		if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
+		{
+			unsigned int c;
+			int v = HAL_DFSDM_FilterGetRegularValue(_stm_dfsdm_filters[STM_DFSDM_RIGHT],(uint32_t*)&c);
+			// Handle the interleaving of data - if stereo buffer[i] has left; buffer[i+1] has right; and i is incremented by 2
+			if(left_right==STM_DFSDM_RIGHT)
+			{
+				buffer[i] = v;
+				buffert[i] = HAL_DFSDM_FilterGetConvTimeValue(_stm_dfsdm_filters[STM_DFSDM_RIGHT]);
+			}
+			else
+			{
+				buffer[i+1] = v;
+				buffert[i+1] = HAL_DFSDM_FilterGetConvTimeValue(_stm_dfsdm_filters[STM_DFSDM_RIGHT]);
+			}
 		}
 	}
 	unsigned long t2 = timer_us_get();
@@ -990,8 +1074,8 @@ void _stm_dfsdm_data_storenext(int *buffer,unsigned long timems,unsigned char le
 		for(unsigned i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
 		{
 			// Shift right to fit in signed short
-			//_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(_stm_dfsdm_rightshift+8);				// 8 LSB are channel number
-			_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(8);				// 8 LSB are channel number
+			//_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(_stm_dfsdm_rightshift+8);				// 8 LSB are channel number - software rightshift
+			_stm_dfsmd_buffers[_stm_dfsmd_buffer_wrptr][i] = buffer[i]>>(8);				// 8 LSB are channel number - hardware rightshift
 		}
 		// Store time
 		_stm_dfsmd_buffers_time[_stm_dfsmd_buffer_wrptr] = timems;
@@ -1281,6 +1365,7 @@ int stm_dfsdm_acquire_start_dma(unsigned char left_right)
 		else
 			fprintf(file_pri,"Audio frame acquisition by DMA left error: %d\n",s1);
 	}
+
 
 	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
 	{
@@ -1616,8 +1701,13 @@ void stm_dfsdm_state_print()
 *******************************************************************************/
 unsigned stm_dfsdm_memoryused()
 {
-	return sizeof(_stm_dfsmd_buffers)+sizeof(_stm_dfsmd_buffers_time)+sizeof(_stm_dfsmd_buffers_pktnum)+sizeof(_stm_dfsdm_dmabuf)+sizeof(_stm_dfsdm_dmabuf2)+sizeof(_stm_dfsmd_buffers_leftright);
+	/*fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_time));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsmd_buffers_pktnum));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf));
+	fprintf(file_pri,"%d\n",sizeof(_stm_dfsdm_dmabuf2));*/
 
+	return sizeof(_stm_dfsmd_buffers)+sizeof(_stm_dfsmd_buffers_time)+sizeof(_stm_dfsmd_buffers_pktnum)+sizeof(_stm_dfsdm_dmabuf)+sizeof(_stm_dfsdm_dmabuf2)+sizeof(_stm_dfsmd_buffers_leftright);
 }
 
 void stm_dfsdm_printreg()
@@ -1648,4 +1738,105 @@ void stm_dfsdm_printreg()
 		fprintf(file_pri,"\tFLTCNVTIMR: %08X\n",(unsigned)filters[i]->FLTCNVTIMR);
 	}
 }
+
+/******************************************************************************
+	function: _stm_dfsdm_sampling_sync
+*******************************************************************************
+	Tentative hack to synchronise two filters.
+
+	Must be called immediately after DMA acquisition started.
+
+	This does not seem
+
+
+	Parameters:
+		-
+
+	Returns:
+		-
+*******************************************************************************/
+void _stm_dfsdm_sampling_sync()
+{
+	// Hack to synchronise sampling of left and right channels
+
+	// Global enable: DFSDMEN=1 in the DFSDM_CH0CFGR1
+	// Tentative procedure: global channel disable; clear dfen; restore dfen; global enable
+
+	unsigned r,gr;
+	unsigned c0,c1;
+
+	// Understand which filters are running: if running ISR has RCIP (0x4000) set.
+	c0 = DFSDM1_Filter0->FLTISR;
+	c1 = DFSDM1_Filter1->FLTISR;
+	//fprintf(file_pri,"Filter 0 FLTISR: %08X\n",c0);
+	//fprintf(file_pri,"Filter 1 FLTISR: %08X\n",c1);
+
+	// Global disable of the DSFSDM peripheral
+	gr = DFSDM1_Channel0->CHCFGR1;	// Initial state
+	//fprintf(file_pri,"DFSDM_CH0CFGR1 pre clear: %08X\n",gr);
+	DFSDM1_Channel0->CHCFGR1 = gr&0x7fffffff;		// Clear global enable
+	//fprintf(file_pri,"DFSDM_CH0CFGR1 post clear: %08X\n",DFSDM1_Channel0->CHCFGR1);
+
+	// Save filter DFEN bit and clear DFEN
+	unsigned f0,f1;
+	f0 = DFSDM1_Filter0->FLTCR1;
+	f1 = DFSDM1_Filter1->FLTCR1;
+	//fprintf(file_pri,"Filter 0 FLTCR1 pre clear: %08X\n",f0);
+	//fprintf(file_pri,"Filter 1 FLTCR1 pre clear: %08X\n",f1);
+
+	DFSDM1_Filter0->FLTCR1 = f0&0xfffffffe;		// Clear DFEN
+	DFSDM1_Filter1->FLTCR1 = f1&0xfffffffe;		// Clear DFEN
+	//fprintf(file_pri,"Filter 0 FLTCR1 post clear: %08X\n",DFSDM1_Filter0->FLTCR1);
+	//fprintf(file_pri,"Filter 1 FLTCR1 post clear: %08X\n",DFSDM1_Filter1->FLTCR1);
+
+	// Restore filter DFEN
+	//DFSDM1_Filter1->FLTCR1 |= 0x80000;		// Set sync
+	//DFSDM1_Filter1->FLTCR1 = f1|0x80000;
+
+	DFSDM1_Filter0->FLTCR1 = f0;
+	DFSDM1_Filter1->FLTCR1 = f1;
+
+	//fprintf(file_pri,"Filter 0 FLTCR1 restored: %08X\n",DFSDM1_Filter0->FLTCR1);
+	//fprintf(file_pri,"Filter 1 FLTCR1 restored: %08X\n",DFSDM1_Filter1->FLTCR1);
+
+
+	// Restore DFSDFM global enable
+	DFSDM1_Channel0->CHCFGR1 = gr;
+	//fprintf(file_pri,"DFSDM_CH0CFGR1 restored: %08X\n",DFSDM1_Channel0->CHCFGR1);
+
+
+
+	//fprintf(file_pri,"Filter 0 FLTISR: %08X\n",DFSDM1_Filter0->FLTISR);
+	//fprintf(file_pri,"Filter 1 FLTISR: %08X\n",DFSDM1_Filter1->FLTISR);
+
+	// Clearing DFEN stops acquisition, reactivate if the filter was initially activated
+	if(c0&0x4000)
+	{
+		//fprintf(file_pri,"Activate flt0\n");
+		DFSDM1_Filter0->FLTCR1 |= 0x20000;
+	}
+	if(c1&0x4000)
+	{
+		//fprintf(file_pri,"Activate flt1\n");
+
+
+		DFSDM1_Filter1->FLTCR1 |= 0x20000;		// Set DFEN
+
+		//DFSDM1_Filter1->FLTCR1 |= 0x20000 | 0x80000;		// Try sync
+	}
+
+	//fprintf(file_pri,"Filter 0 FLTISR: %08X\n",DFSDM1_Filter0->FLTISR);
+	//fprintf(file_pri,"Filter 1 FLTISR: %08X\n",DFSDM1_Filter1->FLTISR);
+
+
+
+	//fprintf(file_pri,"Filter 0 FLTISR: %08X\n",DFSDM1_Filter0->FLTISR);
+	//fprintf(file_pri,"Filter 1 FLTISR: %08X\n",DFSDM1_Filter1->FLTISR);
+
+
+}
+
+
+
+
 

@@ -65,6 +65,7 @@ void stm_dfsdm_acquire_start_poll(unsigned char left_right);
 void stm_dfsdm_offset_set(unsigned char left_right,int offset);
 void stm_dfsdm_rightshift_set(unsigned char left_right,int shift);
 
+unsigned long stm_dfsdm_acq_poll_internal_t(unsigned char left_right,int *buffer,unsigned *buffert,unsigned n);
 
 // Statistics
 void stm_dfsdm_stat_clear();
@@ -75,5 +76,7 @@ void stm_dfsdm_stat_print(void);
 unsigned stm_dfsdm_memoryused();
 void stm_dfsdm_state_print();
 void stm_dfsdm_printreg();
+
+void _stm_dfsdm_sampling_sync();
 
 #endif

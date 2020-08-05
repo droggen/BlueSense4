@@ -22,8 +22,10 @@
 #include "system-extra.h"
 #include "pkt.h"
 
+
 int mode_sample_sound_param_mode;
-int mode_sample_sound_param_framebased;
+//int mode_sample_sound_param_framebased;
+int mode_sample_sound_param_left_right;
 int mode_sample_sound_param_logfile;
 unsigned long stat_snd_samplesendfailed;
 unsigned long stat_snd_samplesendok;
@@ -32,24 +34,15 @@ unsigned long stat_snd_samplesendok;
 //#define SAMPLE_SOUND_DEBUG_NUMSTREAM 10							// For debugging, instead of sending all samples only the first SAMPLE_SOUND_DEBUG_NUMSTREAM of a frame are sent
 
 
-//const char help_samplestatus[] = "Battery and logging status";
-//const char help_batbench[] = "Battery benchmark";
 
 const COMMANDPARSER CommandParsersSampleSound[] =
 {
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
-	//{'W', CommandParserSwap,help_w},
-	//{'F', CommandParserStreamFormat,help_f},
-	//{'L', CommandParserSampleLogMPU,help_samplelog},
-	//{'Z',CommandParserSync,help_z},
-	//{'i',CommandParserInfo,help_info},
 	{'N', CommandParserAnnotation,help_annotation},
 	{'Q', CommandParserBatteryInfoLong,help_batterylong},
 	{'q', CommandParserBatteryInfo,help_battery},
 	{'s', CommandParserSampleSoundStatus,help_samplestatus},
-	//{'x', CommandParserBatBench,help_batbench},
-
 };
 const unsigned char CommandParsersSampleSoundNum=sizeof(CommandParsersSampleSound)/sizeof(COMMANDPARSER);
 
@@ -68,7 +61,8 @@ void mode_sample_sound(void)
 
 	fprintf(file_pri,"SMPLSOUND>\n");
 
-	fprintf(file_pri,"mode: %d frame: %d logfile: %d duration: %d\n",mode_sample_sound_param_mode,mode_sample_sound_param_framebased,mode_sample_sound_param_logfile,mode_sample_param_duration);
+	//fprintf(file_pri,"mode: %d frame: %d logfile: %d duration: %d\n",mode_sample_sound_param_mode,mode_sample_sound_param_framebased,mode_sample_sound_param_logfile,mode_sample_param_duration);
+	fprintf(file_pri,"mode: %d left_right: %d logfile: %d duration: %d\n",mode_sample_sound_param_mode,mode_sample_sound_param_left_right,mode_sample_sound_param_logfile,mode_sample_param_duration);
 
 
 	mode_sample_file_log=0;										// Initialise log to null
@@ -77,7 +71,7 @@ void mode_sample_sound(void)
 	// Load
 	stream_load_persistent_frame_settings();
 	// Set audio mode
-	stm_dfsdm_init(mode_sample_sound_param_mode,STM_DFSDM_LEFT);
+	stm_dfsdm_init(mode_sample_sound_param_mode,mode_sample_sound_param_left_right);
 
 	// Clear sample statistics
 	mode_sample_clearstat();
@@ -159,9 +153,13 @@ void mode_sample_sound(void)
 	Parses the Motion command: M[,mode[,logfile[,duration]]
 
 	If no parameter is passed, it prints the available motion modes.
-	Single parameter: motion mode
-	Two parameters: motion mode and logfile on which to store data
-	Three parameters: motion mode, logfile, and duration in seconds to run this mode before exiting.
+	No param: print modes
+	1 param: invalid
+	2 param: stream
+	3 param: log
+	4 param log duration
+
+	S[,<mode>,<left_right>[,<logfile>[,<duration>]]]:
 
 
 	Parameters:
@@ -176,10 +174,11 @@ void mode_sample_sound(void)
 unsigned char CommandParserSampleSound(char *buffer,unsigned char size)
 {
 	unsigned char rv;
-	int mode,framebased,lognum,duration;
+	int mode,lognum,duration,left_right;
+	//int framebased;
 
 	// Parse from the smallest number of arguments to the largest
-	rv = ParseCommaGetInt((char*)buffer,1,&mode);
+	rv = ParseCommaGetInt((char*)buffer,2,&mode,&left_right);
 	if(rv)
 	{
 		// No argument - display available modes and returns successfully
@@ -188,68 +187,53 @@ unsigned char CommandParserSampleSound(char *buffer,unsigned char size)
 		return 0;
 	}
 
-	// One argument - check validity
+	// Two arguments - check validity
 	if(mode<0 || mode>STM_DFSMD_INIT_MAXMODES)
 		return 2;	// Invalid
+	if(left_right<0 || left_right>STM_DFSDM_STEREO)
+		return 2;	// Invalid
 
-
-	// Check if two arguments - sufficient for motion sampling mode
-	rv = ParseCommaGetInt((char*)buffer,2,&mode,&framebased);
+	// Check if 3 arguments
+	rv = ParseCommaGetInt((char*)buffer,3,&mode,&left_right,&lognum);
 	if(rv==0)
 	{
+		//fprintf(file_pri,"3 arg - lognum: %d\n",lognum);
+		/*
+		// Don't test if log is valid - to be consistent with motion mode
+		int availlog = ufat_log_getnumlogs();
 		// Success
-		if(framebased!=0 && framebased!=1)
+		if(lognum<0 || lognum>availlog)
+		{
+			fprintf(file_pri,"Invalid log file number. Number of log files: %d\n",availlog);
 			return 2;
+		}*/
 
-		// Check if 3 arguments
-		rv = ParseCommaGetInt((char*)buffer,3,&mode,&framebased,&lognum);
+		// Check if 4 arguments
+		rv = ParseCommaGetInt((char*)buffer,4,&mode,&left_right,&lognum,&duration);
 		if(rv==0)
 		{
-			//fprintf(file_pri,"3 arg - lognum: %d\n",lognum);
-			/*
-			// Don't test if log is valid - to be consistent with motion mode
-			int availlog = ufat_log_getnumlogs();
+			//fprintf(file_pri,"4 arg\n");
 			// Success
-			if(lognum<0 || lognum>availlog)
-			{
-				fprintf(file_pri,"Invalid log file number. Number of log files: %d\n",availlog);
+			if(duration<0)
 				return 2;
-			}*/
-
-			// Check if 4 arguments
-			rv = ParseCommaGetInt((char*)buffer,4,&mode,&framebased,&lognum,&duration);
-			if(rv==0)
-			{
-				//fprintf(file_pri,"4 arg\n");
-				// Success
-				if(duration<0)
-					return 2;
-				// Three arguments were passed
-				// Start with framebased, log file, duration
-				mode_sample_sound_setparam(mode,framebased,lognum,duration);
-			}
-			else
-			{
-				//fprintf(file_pri,"really 3 arg\n");
-				// Three arguments were passed
-				// Start with framebased, log file, no duration
-				mode_sample_sound_setparam(mode,framebased,lognum,0);
-			}
-
+			// Three arguments were passed
+			// Start with framebased, log file, duration
+			mode_sample_sound_setparam(mode,left_right,lognum,duration);
 		}
 		else
 		{
-			// Two arguments were passed
-			// Start with framebased, no log file, no duration
-			mode_sample_sound_setparam(mode,framebased,-1,0);
-
+			//fprintf(file_pri,"really 3 arg\n");
+			// Three arguments were passed
+			// Start with framebased, log file, no duration
+			mode_sample_sound_setparam(mode,left_right,lognum,0);
 		}
+
 	}
 	else
 	{
-		// Start with sample based, no log file, no duration
-		mode_sample_sound_setparam(mode,0,-1,0);
-
+		// Two arguments were passed
+		// Start, no log file, no duration
+		mode_sample_sound_setparam(mode,left_right,-1,0);
 	}
 
 	CommandChangeMode(APP_MODE_SAMPLESOUND);
@@ -257,12 +241,14 @@ unsigned char CommandParserSampleSound(char *buffer,unsigned char size)
 	return 0;
 }
 
-void mode_sample_sound_setparam(unsigned char mode,unsigned char framebased, int logfile, int duration)
+//void mode_sample_sound_setparam(unsigned char mode,unsigned char framebased, int logfile, int duration)
+void mode_sample_sound_setparam(unsigned char mode,unsigned char left_right, int logfile, int duration)
 {
 	mode_sample_sound_param_mode=mode;
-	mode_sample_sound_param_framebased=framebased;
+	//mode_sample_sound_param_framebased=framebased;
 	mode_sample_sound_param_logfile=logfile;
 	mode_sample_param_duration=duration;		// Store the duration in seconds
+	mode_sample_sound_param_left_right=left_right;
 
 	//printf("duration: %lu\n",mode_sample_motion_param.duration);
 	//printf("mode_sample_motion_setparam: %d %d %d\n",mode_sample_motion_param.mode,mode_sample_motion_param.logfile,mode_sample_motion_param.duration);
@@ -275,19 +261,20 @@ unsigned char CommandParserSampleSoundStatus(char *buffer,unsigned char size)
 }
 
 
-int audio_stream_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
+int audio_stream_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f)
 {
+	// The "sample" format is not deprecated
 	if(mode_stream_format_bin==0)
 	{
-		if(mode_sample_sound_param_framebased)
-			return audio_stream_sample_text_frame(audbuf,audbufms,pkt,f);
-		return audio_stream_sample_text_sample(audbuf,audbufms,pkt,f);
+		//if(mode_sample_sound_param_framebased)
+			return audio_stream_sample_text_frame(audbuf,audbufms,pkt,left_right,f);
+		//return audio_stream_sample_text_sample(audbuf,audbufms,pkt,f);
 	}
 	else
 	{
-		if(mode_sample_sound_param_framebased)
-			return audio_stream_sample_bin_frame(audbuf,audbufms,pkt,f);
-		return audio_stream_sample_bin_sample(audbuf,audbufms,pkt,f);
+		//if(mode_sample_sound_param_framebased)
+			return audio_stream_sample_bin_frame(audbuf,audbufms,pkt,left_right,f);
+		//return audio_stream_sample_bin_sample(audbuf,audbufms,pkt,f);
 	}
 	return 0;
 }
@@ -333,7 +320,7 @@ void audio_stream_format_metadata_bin(PACKET *p,unsigned long time,unsigned long
 
 }
 
-int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
+int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f)
 {
 	// Frame version
 	// Assume STM_DFSMD_BUFFER_SIZE is short
@@ -344,6 +331,11 @@ int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms
 
 	// Format metadata
 	buf2 = audio_stream_format_metadata_text(buf2,audbufms,pkt);
+	// Add channel
+	*buf2 = '0'+left_right;
+	buf2++;
+	*buf2=' ';
+	buf2++;
 	// Format samples
 	for(unsigned int i=0;i<SAMPLE_SOUND_DEBUG_NUMSTREAM;i++)
 	{
@@ -359,6 +351,7 @@ int audio_stream_sample_text_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms
 	return fputbuf(f,buf,buf2-buf);
 
 }
+#if 0
 int audio_stream_sample_text_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
 {
 	// Sample version
@@ -384,13 +377,16 @@ int audio_stream_sample_text_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufm
 
 	return putbuferr;
 }
-int audio_stream_sample_bin_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
+#endif
+int audio_stream_sample_bin_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,unsigned char left_right,FILE *f)
 {
 	PACKET p;
 	packet_init(&p,"DSN",3);
 
 	// Metadata
 	audio_stream_format_metadata_bin(&p,audbufms,pkt);
+	// Add channel
+	packet_add8(&p,left_right);
 	// Audio data
 	for(unsigned int i=0;i<STM_DFSMD_BUFFER_SIZE;i++)
 	{
@@ -408,6 +404,7 @@ int audio_stream_sample_bin_frame(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,
 
 	return 0;
 }
+#if 0
 int audio_stream_sample_bin_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms,unsigned long pkt,FILE *f)
 {
 	PACKET p;
@@ -434,7 +431,7 @@ int audio_stream_sample_bin_sample(STM_DFSMD_TYPE *audbuf,unsigned long audbufms
 	}
 	return putbuferr;
 }
-
+#endif
 
 
 
@@ -465,14 +462,14 @@ void stream_sound_status(FILE *f,unsigned char bin)
 	// Statistics in frames or samples
 	// Total error is lost frame during acquisition and samples/frames not sent.
 	unsigned long toterr,totsample,overrun,sendok,sr;
-	if(mode_sample_sound_param_framebased)
-	{
+	//if(mode_sample_sound_param_framebased)
+	//{
 		toterr = stm_dfsdm_stat_lostframes() + stat_snd_samplesendfailed;
 		totsample = stm_dfsdm_stat_totframes();
 		overrun = stm_dfsdm_stat_lostframes();
 		sendok = stat_snd_samplesendok;
-		sr =  stat_snd_samplesendok*SAMPLE_SOUND_DEBUG_NUMSTREAM*1000/(stat_t_cur-stat_timems_start);
-	}
+		sr =  stat_snd_samplesendok*STM_DFSMD_BUFFER_SIZE*1000/(stat_t_cur-stat_timems_start);		// Even if we send less samples in debug mode we calculate the audio acquisition sample rate.
+	/*}
 	else
 	{
 		toterr = stm_dfsdm_stat_lostframes()*STM_DFSMD_BUFFER_SIZE + stat_snd_samplesendfailed;
@@ -480,7 +477,7 @@ void stream_sound_status(FILE *f,unsigned char bin)
 		overrun = stm_dfsdm_stat_lostframes()*STM_DFSMD_BUFFER_SIZE;
 		sendok = stat_snd_samplesendok*SAMPLE_SOUND_DEBUG_NUMSTREAM;
 		sr =  sendok*1000/(stat_t_cur-stat_timems_start);
-	}
+	}*/
 
 	unsigned long errppm = (unsigned long long)toterr*1000000/totsample;			// Computation on 64-bit needed
 
@@ -497,7 +494,8 @@ void stream_sound_status(FILE *f,unsigned char bin)
 				toterr,
 				overrun,stat_snd_samplesendfailed,
 				errppm,
-				mode_sample_sound_param_framebased?"frames":"samples",
+				//mode_sample_sound_param_framebased?"frames":"samples",
+				"frames",
 				sr);
 		_MODE_SAMPLE_STREAM_STATUS_LOGSIZE;
 	}

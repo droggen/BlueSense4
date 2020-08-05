@@ -51,6 +51,7 @@ void MX_DFSDM1_Init(void)
     Error_Handler();
   }
   hdfsdm1_filter1.Instance = DFSDM1_Filter1;
+  //hdfsdm1_filter1.Init.RegularParam.Trigger = DFSDM_FILTER_SYNC_TRIGGER;
   hdfsdm1_filter1.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
   hdfsdm1_filter1.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter1.Init.RegularParam.DmaMode = ENABLE;

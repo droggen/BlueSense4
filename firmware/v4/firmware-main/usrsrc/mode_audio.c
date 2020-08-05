@@ -125,9 +125,7 @@ const COMMANDPARSER CommandParsersAudio[] =
 	{'G',CommandParserAudReg,"Print DFSDM registers"},
 	{'R',CommandParserAudRightshift,"R,<shift_l>,<shift_r> Set the hardware right-shift"},
 
-	{0,0,"---- TODO ----"},
-	{0,0,"- Play with the dividers"},
-
+	{'1',CommandParserAudSync,"Sync"},
 
 
 	//{'d',CommandParserAudDMAStop,"Stop sampling with DMA acquisition"},
@@ -591,6 +589,7 @@ unsigned char CommandParserAudDMAStart(char *buffer,unsigned char size)
 	Returns:
 		-
 ******************************************************************************/
+#if 0
 unsigned char CommandParserAudPollPrint(char *buffer,unsigned char size)
 {
 	(void)size; (void)buffer;
@@ -602,7 +601,8 @@ unsigned char CommandParserAudPollPrint(char *buffer,unsigned char size)
 	if(left_right<0 || left_right>2)
 		return 2;
 
-	unsigned maxsample=10000;
+	//unsigned maxsample=10000;
+	unsigned maxsample=100;
 	int data[maxsample];
 	unsigned long dt = stm_dfsdm_acq_poll_internal(left_right,data,maxsample);
 
@@ -616,6 +616,50 @@ unsigned char CommandParserAudPollPrint(char *buffer,unsigned char size)
 			fprintf(file_pri,"%d\n",data[i]);
 		else
 			fprintf(file_pri,"%d %d\n",data[i],data[i+1]);
+	}
+	unsigned long long sr = (unsigned long long)maxsample*1000000/dt;
+
+
+	fprintf(file_pri,"%% Acquisition time for %u samples: %lu us. Sample rate: %lu\n",maxsample,dt,(unsigned long)sr);
+
+
+
+	return 0;
+}
+#endif
+unsigned char CommandParserAudPollPrint(char *buffer,unsigned char size)
+{
+	(void)size; (void)buffer;
+
+	int left_right;
+
+	if(ParseCommaGetInt(buffer,1,&left_right))
+		return 2;
+	if(left_right<0 || left_right>2)
+		return 2;
+
+	fprintf(file_pri,"Left right: %d\n",left_right);
+
+	//unsigned maxsample=10000;
+	unsigned maxsample=54;
+	int data[maxsample];
+	unsigned datat[maxsample];
+	unsigned long dt = stm_dfsdm_acq_poll_internal_t(left_right,data,datat,maxsample);
+
+	int inc = 1;
+	if(left_right==STM_DFSDM_STEREO)	// In stereo data is interleaved
+		inc=2;
+
+	for(int i=0;i<maxsample;i+=inc)
+	{
+		if(left_right!=STM_DFSDM_STEREO)
+		{
+			fprintf(file_pri,"%d (%u)\n",data[i],datat[i]);
+		}
+		else
+		{
+			fprintf(file_pri,"%d (%u) %d (%u)\n",data[i],datat[i],data[i+1],datat[i+1]);
+		}
 	}
 	unsigned long long sr = (unsigned long long)maxsample*1000000/dt;
 
@@ -1329,4 +1373,12 @@ unsigned char CommandParserAudRightshift(char *buffer,unsigned char size)
 
 	return 0;
 
+}
+unsigned char CommandParserAudSync(char *buffer,unsigned char size)
+{
+	(void)size; (void)buffer;
+
+	_stm_dfsdm_sampling_sync();
+
+	return 0;
 }

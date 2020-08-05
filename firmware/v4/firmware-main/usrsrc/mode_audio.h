@@ -57,5 +57,7 @@ unsigned char CommandParserAudStatClear(char *buffer,unsigned char size);
 unsigned char CommandParserAudStatus(char *buffer,unsigned char size);
 unsigned char CommandParserAudRightshift(char *buffer,unsigned char size);
 
+unsigned char CommandParserAudSync(char *buffer,unsigned char size);
+
 #endif
 
