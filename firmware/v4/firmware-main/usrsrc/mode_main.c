@@ -142,7 +142,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'~', CommandParserClearBootCounter,help_clearbootctr},
 	//{'x', CommandParserx,help_x}
 	{'E',CommandParserEEPROM,help_eeprom},
-	//{'K',CommandParserBenchmark,help_benchmark},
+	{'K',CommandParserBenchmark,help_benchmark},
 	{'u',CommandParserUSB,help_usbreinit},
 	{'.',CommandParserInterrupts,help_interrupts},
 	{'2',CommandParserI2CTest,help_i2c},

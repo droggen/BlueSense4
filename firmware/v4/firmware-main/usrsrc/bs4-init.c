@@ -149,9 +149,7 @@ void bs4_init_extended()
 	// Get the current power data
 	// This is done before calling ltc2942_init: this is ok as (except the first boot) the ltc is always configured identically.
 	// However as ltc2942_init resets the counter to mid-range, the counter reading must occur here.
-	_poweruse_data_aton.charge = ltc2942_getcharge();
-	_poweruse_data_aton.voltage = ltc2942_getvoltage();
-	_poweruse_data_aton.time = timer_ms_get();
+	power_get_state(&_poweruse_data_aton);
 	// Read power data stored during last off
 	system_loadpowerdata(&_poweruse_data_atoff);
 	// Mark the stored data as now invalid

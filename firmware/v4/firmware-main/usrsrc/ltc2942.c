@@ -468,6 +468,7 @@ void ltc2942_printreg(FILE *file)
 *******************************************************************************/
 signed short ltc2942_getavgpower(unsigned long c1,unsigned long c2,unsigned short voltage,unsigned long ms)
 {
+#warning Modify to use start and end voltage for higher accuracy on longer measurements
 	signed long dq = c2-c1;	// delta uAh
 
 	signed long den;

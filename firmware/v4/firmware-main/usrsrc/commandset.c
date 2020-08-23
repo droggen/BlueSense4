@@ -986,8 +986,13 @@ unsigned char CommandParserInterrupts(char *buffer,unsigned char size)
 unsigned char CommandParserBenchmark(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
-	fprintf(file_pri,"Running until keypress\n");
 
+
+
+
+
+	/*
+	fprintf(file_pri,"Running until keypress\n");
 	unsigned t1 = timer_ms_get();
 	unsigned c=0;
 	while(1)
@@ -997,7 +1002,23 @@ unsigned char CommandParserBenchmark(char *buffer,unsigned char size)
 			break;
 	}
 	unsigned t2 = timer_ms_get();
-	fprintf(file_pri,"Count %u in %u ms (cps=%u)\n",c,t2-t1,c*1000/(t2-t1));
+	fprintf(file_pri,"Count %u in %u ms (cps=%u)\n",c,t2-t1,c*1000/(t2-t1));*/
+
+	static signed int pwr;
+	static unsigned long timems;
+	fprintf(file_pri,"Data of previous measurement: time %ld ms Power: %d mW\n",timems,pwr);
+	power_measure_start();
+	for(int i=0;i<60;i++)
+	{
+		fprintf(file_pri,"Power test: %d\n",i);
+		HAL_Delay(1000);
+	}
+
+	pwr = power_measure_stop(&timems);
+	fprintf(file_pri,"Time elapsed: %ld Power: %d mW\n",timems,pwr);
+
+
+
 	return 0;
 }
 
