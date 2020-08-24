@@ -5,6 +5,7 @@
 #include "atomicop.h"
 #include "stmdfsdm.h"
 #include "global.h"
+#include "eeprom-m24.h"
 
 /*
 	File: mpu
@@ -51,13 +52,13 @@
 
 
 	Data acquisition
-		stm_dfsdm_init			-	Primary function to start or stop data acquisition. Data acquisition is done via DMA and accessed
+		* stm_dfsdm_init			-	Primary function to start or stop data acquisition. Data acquisition is done via DMA and accessed with stm_dfsdm_data_getnext
 
 	Statistics
-	* stm_dfsdm_clearstat
-    * stm_dfsdm_stat_totframes
-    * stm_dfsdm_stat_lostframes
-    * stm_dfsdm_data_printstat
+		* stm_dfsdm_clearstat
+		* stm_dfsdm_stat_totframes
+		* stm_dfsdm_stat_lostframes
+		* stm_dfsdm_data_printstat
 
 
 
@@ -361,6 +362,14 @@ void _stm_dfsdm_init_predef(unsigned mode,unsigned char left_right)
 		_stm_dfsdm_rightshift=11;
 #endif
 	}
+
+	// Get the volume gain
+	int v = stm_dfsdm_loadvolumegain();
+	if(v>0)
+		_stm_dfsdm_rightshift-=v;		// Positive: higher gain wanted -> less right shift
+	else
+		_stm_dfsdm_rightshift+=(-v);	// Negative: higher gain wanted -> less right shift
+	fprintf(file_pri,"\tVolume gain: %d (rightshift: %d)\n",v,_stm_dfsdm_rightshift);
 
 	// Set the hardware right shift
 	stm_dfsdm_rightshift_set(left_right,_stm_dfsdm_rightshift);
@@ -1836,7 +1845,55 @@ void _stm_dfsdm_sampling_sync()
 
 }
 
+/******************************************************************************
+	function: stm_dfsdm_storevolumegain
+*******************************************************************************
+	Store the volume gain to EEPROM.
+	The volume gain adjusts the default bit-right shift and can be used
+	to increase senstivity to low volume, or increase tolerance to high volumes.
 
+
+	Parameters:
+		g:				Gain. Value from -2 to +2. 0 means default volume. +2 increases amplitude by a factor 4. -2 decreases amplitude by a factor 4.
+
+	Returns:
+		-
+*******************************************************************************/
+void stm_dfsdm_storevolumegain(signed char g)
+{
+	if(g>2) g=2;
+	if(g<-2) g=-2;
+	// Shift to positive range, as 0xFF is a reserved value in the EEPROM indicating an uninitialised cell.
+	g+=2;
+	eeprom_write_byte(CONFIG_ADDR_AUDIO_SETTINGS,(unsigned char)g);
+}
+
+/******************************************************************************
+	function: stm_dfsdm_loadvolumegain
+*******************************************************************************
+	Load the volume gain from EEPROM.
+
+	The volume gain adjusts the default bit-right shift and can be used
+	to increase senstivity to low volume, or increase tolerance to high volumes.
+
+
+	Parameters:
+		-
+
+	Returns:
+		Gain. Value from -2 to +2. 0 means default volume. +2 increases amplitude by a factor 4. -2 decreases amplitude by a factor 4.
+*******************************************************************************/
+signed char stm_dfsdm_loadvolumegain()
+{
+	unsigned char gu = eeprom_read_byte(CONFIG_ADDR_AUDIO_SETTINGS,1,2);		// Default value is "2" which corresponds to vol of 0
+	// Shift to positive-negative range
+	signed char g = (signed char)gu;
+	g-=2;
+
+	if(g>2) g=2;
+	if(g<-2) g=-2;
+	return g;
+}
 
 
 

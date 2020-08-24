@@ -101,6 +101,8 @@ extern unsigned char __mode_sleep;
 // MPU related settings - MPU requires ~50 bytes of non-volatile storage
 #define CONFIG_ADDR_MPU_SETTINGS 600
 
+#define CONFIG_ADDR_AUDIO_SETTINGS 700
+
 unsigned long main_perfbench(unsigned long mintime);
 
 #endif /* GLOBAL_H_ */

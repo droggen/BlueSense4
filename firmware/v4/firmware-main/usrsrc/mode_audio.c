@@ -91,7 +91,10 @@ const COMMANDPARSER CommandParsersAudio[] =
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
 
-	{0,0,"---- General information ----"},
+	{0,0,"---- Audio settings ----"},
+	{'V',CommandParserVolume,"V[,<vol>] Get the current amplification volume or set it.\n\t\t<vol> ranges from -2 to +2: 0 is default volume; positive/negative values increase/decrease the volume.\n\t\tThis is only valid with "},
+	{0,0,""},
+	{0,0,"---- Developer functions ----"},
 	{0,0,"Use S to initialise and start sampling via DMA. Stream data with d or x; log data with L."},
 	{0,0,"Low level initialisation-only (sampling is not started): I or i for pre-defined or custom settings. Start sampling with D or P."},
 	{0,0,"<left_right> must be identical to the initialisation value (S, I, i) for all subsequent commands (D, P, p, O, Z, etc)."},
@@ -1380,5 +1383,27 @@ unsigned char CommandParserAudSync(char *buffer,unsigned char size)
 
 	_stm_dfsdm_sampling_sync();
 
+	return 0;
+}
+unsigned char CommandParserVolume(char *buffer,unsigned char size)
+{
+	(void)size; (void)buffer;
+	if(ParseCommaGetNumParam(buffer)>1)
+		return 2;
+	if(ParseCommaGetNumParam(buffer)==0)
+	{
+		// Get current volume
+		int v = stm_dfsdm_loadvolumegain();
+		fprintf(file_pri,"Volume gain: %d\n",v);
+		return 0;
+	}
+	// Parse and store new volume
+	int v;
+	if(ParseCommaGetInt(buffer,1,&v))
+		return 2;
+	if(v<-2 || v>+2)
+		return 1;
+	fprintf(file_pri,"Setting volume gain: %d\n",v);
+	stm_dfsdm_storevolumegain(v);
 	return 0;
 }

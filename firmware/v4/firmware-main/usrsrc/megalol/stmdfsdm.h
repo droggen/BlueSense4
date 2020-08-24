@@ -77,6 +77,11 @@ unsigned stm_dfsdm_memoryused();
 void stm_dfsdm_state_print();
 void stm_dfsdm_printreg();
 
+// Store/load volume control
+void stm_dfsdm_storevolumegain(signed char g);
+signed char stm_dfsdm_loadvolumegain();
+
+// Tryouts
 void _stm_dfsdm_sampling_sync();
 
 #endif

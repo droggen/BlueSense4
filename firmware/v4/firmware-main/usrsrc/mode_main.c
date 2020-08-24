@@ -105,7 +105,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'t', CommandParserTime_Test,help_ttest},
 #endif
 	
-	{'S', CommandParserSampleSound,"S[,<mode>[,<frame>[,<logfile>[,<duration>]]]: Sound streaming/logging. No parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
+	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging. No parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds. left_right: 0=left, 1=right, 2=stereo."},
 	{'s', CommandParserAudio,help_audio},
 
 	{'A', CommandParserADC,help_a},
