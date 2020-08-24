@@ -120,6 +120,31 @@ const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 };
 
 /******************************************************************************
+	_stm_dfsdm_modes_param
+*******************************************************************************
+	Parameters to set-up the audio acquisition at pre-defined frequencies.
+	Each entry comprises the following parameters in this order: order fosr iosr div shift
+******************************************************************************/
+const unsigned char _stm_dfsdm_modes_param[STM_DFSMD_INIT_MAXMODES+1][5] = {
+		// These parameters assume an audio clock of 20MHz.
+
+		// OFF - the parameters are irrelevant for this mode
+		{0,     0,     0,     0,     0},
+		// 8KHz
+
+		{4,     88,    1,     7,     11},			// 8003Hz. Clipping rightshift: 10. Ok rightshift 11
+		//{3,82,1,10,3},							// Alternative settings with non-overclocked microphone, poorer quality
+
+		// 16KHz
+		{5,     40,    1,     6,     10},			// 16181 Hz. Clipping with rightshift: 7, 8, 9. Ok with rightshift: 10
+
+		// 20KHz
+		//stm_dfsdm_initsampling(left_right,5,32,1,6);
+		{5,     32,    1,     6,     8},			// 20080 Hz with clock at 3.33MHz. Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
+
+};
+
+/******************************************************************************
 	function: stm_dfsdm_init
 *******************************************************************************
 	Primary function to initialise and start, or stop, audio data acquisition by DMA.
@@ -219,149 +244,15 @@ void _stm_dfsdm_init_predef(unsigned mode,unsigned char left_right)
 			fprintf(file_pri,"stereo ");
 			break;
 	}
-	switch(mode)
-	{
-	case STM_DFSMD_INIT_OFF:
-		// Nothing to be done to turn off
-#warning Power optimisation: turn off clocks
-		fprintf(file_pri,"off\n");
+
+	// Print the mode (off or frequency)
+	fprintf(file_pri,"%s\n",_stm_dfsdm_modes[mode]);
+	// If mode is off, nothing more to do.
+	if(mode==STM_DFSMD_INIT_OFF)
 		return;
-		break;
-
-	case STM_DFSMD_INIT_16K:	// OK quality
-		fprintf(file_pri,"16KHz\n");
-#if 0
-		stm_dfsdm_initsampling(left_right,5,30,1,8);				// 16026 Hz
-
-		// Range of signal: 30^5 = 24300000
-		//_stm_dfsdm_rightshift = 10;						// 24300000/2^10 = 23730
-
-		// Experimentally with righshift 10 max range is +/- 3400 -> multiply by 4
-		//_stm_dfsdm_rightshift-=2;
-
-		// Experimentally, rightshift of 7, 8 clips when extremely close to mic
-		// Ok with rightshift 9. (8 could be used to increase sensitivity if no loud sound in environment)
-		_stm_dfsdm_rightshift=9;
-#endif
-#if 1
-		// Higher quality with divider 6
-		stm_dfsdm_initsampling(left_right,5,40,1,6);				// 16181 Hz
-
-		// Clipping with rightshift: 7, 8, 9
-		// Ok with rightshift: 10
-		_stm_dfsdm_rightshift=10;
-#endif
-
-
-		break;
-
-
-
-	case STM_DFSMD_INIT_20K:
-		fprintf(file_pri,"20KHz\n");
-#if 0
-		stm_dfsdm_initsampling(left_right,5,21,1,9);				// 20020 Hz with clock at 2.22MHz
-
-		// Range of signal: 21^5=4084101
-		//_stm_dfsdm_rightshift = 7;						// 4084101/2^7 = 31907
-
-		// Experimentally with righshift ? max range is +/- ? -> multiply by 4
-		//_stm_dfsdm_rightshift-=2;
-
-		// Experimentally with right shift of 5 there is clipping (4 heavy clipping) with 800Hz ref tone. Minimum rightshift is 6.
-		_stm_dfsdm_rightshift=6;
-#endif
-#if 1
-		stm_dfsdm_initsampling(left_right,5,32,1,6);				// 20080 Hz with clock at 3.33MHz
-		// Experimentally, higher quality than with divider of 9, although beyond microphone spec.
-		// Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
-		_stm_dfsdm_rightshift=8;
-#endif
-
-		break;
-
-	case STM_DFSMD_INIT_24K:
-		fprintf(file_pri,"24KHz\n");
-		stm_dfsdm_initsampling(left_right,4,22,1,9);				// 23894
-
-		// Range of signal: 22^4=234256
-		_stm_dfsdm_rightshift = 3;						// 234256/2^3 = 29282
-
-		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
-		_stm_dfsdm_rightshift-=2;
-
-
-		break;
-
-
-
-	case STM_DFSMD_INIT_32K:
-		fprintf(file_pri,"32KHz\n");
-		//stm_dfsdm_initsampling(5,17,1,7);				// 31397
-		stm_dfsdm_initsampling(left_right,3,22,1,9);				// 31397
-		//stm_dfsdm_initsampling(5,13,1,9);				// 31298			Noisy
-		//stm_dfsdm_initsampling(5,20,1,6);				// ?				Noisy
-
-		// Range of signal: 17^5 = 1419857
-		//_stm_dfsdm_rightshift = 6;						// 1419857/2^6 = 22185
-		// 22^3
-		_stm_dfsdm_rightshift = 0;
-
-		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
-		//_stm_dfsdm_rightshift-=2;
-
-
-		break;
-
-	case STM_DFSMD_INIT_48K:
-		fprintf(file_pri,"48KHz\n");
-		stm_dfsdm_initsampling(left_right,5,8,1,9);				// 48309
-
-		// Range of signal: 8^5=32768
-		_stm_dfsdm_rightshift = 0;						//
-		//_stm_dfsdm_rightshift = 6;						// 1419857/2^6 = 22185
-
-		// Experimentally with righshift 6 max range is +/- 4000 -> multiply by 4
-		//_stm_dfsdm_rightshift-=2;
-
-
-		break;
-
-
-
-	case STM_DFSMD_INIT_8K:		// OK
-	default:
-		fprintf(file_pri,"8KHz\n");
-#if 0
-		stm_dfsdm_initsampling(left_right,3,82,1,10);				// 8000 Hz
-
-		// Range of signal: 82^3 = 551368
-		//_stm_dfsdm_rightshift = 5;						// 551368/2^5 = 17230
-
-		// Experimentally with righshift 5 max range is +/- 2600 -> multiply by 4
-		//_stm_dfsdm_rightshift-=2;
-
-		// With rightshift of 3 and loud 800Hz (max ampl) beep sound very close to mic: +15000-8000.
-		// With rightshift of 2: clipping.
-		// Experimentally 3 is the lowest suitable shift.
-		_stm_dfsdm_rightshift=3;
-#endif
-#if 0
-		stm_dfsdm_initsampling(left_right,5,82,1,6);				// 8012 Hz
-
-		// Inaudible: rightshift 3
-		// Clipping rightshift: 9, 12, 14, 15
-		// OK rightshift: 16
-		_stm_dfsdm_rightshift=16;
-#endif
-#if 1
-		stm_dfsdm_initsampling(left_right,4,88,1,7);				// 8003 Hz
-		//_stm_dfsdm_rightshift=16; // max ampl 400
-		// Clipping rightshift: 10
-		// OK rightshift: 11
-		_stm_dfsdm_rightshift=11;
-#endif
-	}
+	// Init the mode
+	stm_dfsdm_initsampling(left_right,_stm_dfsdm_modes_param[mode][0],_stm_dfsdm_modes_param[mode][1],_stm_dfsdm_modes_param[mode][2],_stm_dfsdm_modes_param[mode][3]);
+	_stm_dfsdm_rightshift=_stm_dfsdm_modes_param[mode][4];
 
 	// Get the volume gain
 	int v = stm_dfsdm_loadvolumegain();
