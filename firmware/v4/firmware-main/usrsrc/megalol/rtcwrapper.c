@@ -149,3 +149,4 @@ void rtc_setirqhandler(void (*h)(void))
 	max31343_setirqhandler(h);
 #endif
 }
+

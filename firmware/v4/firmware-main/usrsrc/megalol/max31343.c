@@ -69,6 +69,7 @@ unsigned char max31343_isok()
 
 
 	unsigned char rv = i2c_readreg(MAX31343_ADDRESSS,0,&d);
+	//fprintf(file_pri,"isok: reg %d\n",d);
 
 	if(rv!=0)
 		return 0;
@@ -99,6 +100,7 @@ unsigned char max31343_init()
 
 	// Read the status register - this clears possible interrupts
 	i2c_readreg(MAX31343_ADDRESSS,0,&d);
+	//fprintf(file_pri,"init: reg %d\n",d);
 	(void)d;
 
 	// Initialise the I2C transactions to read the status register in background
@@ -465,7 +467,8 @@ unsigned char max31343_alarm_at(unsigned char day, unsigned char month, unsigned
 	r = i2c_writeregs(MAX31343_ADDRESSS,0x0d,v,6);
 
 	// Activate the alarm 1 interrupt
-	max31343_writereg(1,65);						// DSOF and ALM1IE
+	r=max31343_writereg(1,65);						// DSOF and ALM1IE
+	(void)r;
 
 	return 0;
 }
