@@ -90,17 +90,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 //#define ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 
 
-//#include "cpu.h"
 #include "wait.h"
-//#include <avr/io.h>
-//#include <avr/interrupt.h>
 #include <stdio.h>
-//#include <avr/pgmspace.h>
-//#include <util/atomic.h>
-//#include <util/delay.h>
-//#include "numeric.h"
 #include "dsystick.h"
-//#include "cmsis_armclang.h"
 #include "atomicop.h"
 
 
@@ -250,23 +242,18 @@ void _timer_tick_hz(void)
 	_timer_time_1hzupdatectr++;
 
 	// Updating the internal time every 5s leads to <estimate ppm error>
-	if(_timer_time_1hzupdatectr>=5)
+	const unsigned updateperiod = 5;
+	if(_timer_time_1hzupdatectr>=updateperiod)
 	//if(_timer_time_1hzupdatectr>=1)
 	{
 		_timer_time_1hzupdatectr=0;
 		
-		// Correct the TCNT
-		// TOFIX ARM
+		// Correct the systick
 		dsystick_clear();
-		//WAIT_TCNT=0;				// Clear counter, and in case the timer generated an interrupt during this initialisation process clear the interrupt flag manually
-		//WAIT_TIFR=0b00100111;		// Clear all interrupt flags
 	
 		// Must adjust accordingly
-		//_timer_1hztimer_in_ms+=1000;
-		//_timer_1hztimer_in_us+=1000000l;
-		// Must adjust accordingly
-		_timer_1hztimer_in_ms+=5000;
-		_timer_1hztimer_in_us+=5000000l;
+		_timer_1hztimer_in_ms+=updateperiod*1000;
+		_timer_1hztimer_in_us+=updateperiod*1000000l;
 
 		// Update the current time. Note that _timer_time_ms and _timer_time_us can jump back or forward in time if the internal clock is respectively too fast or too slow.
 		_timer_time_ms=_timer_1hztimer_in_ms;	
@@ -508,36 +495,19 @@ unsigned long int timer_us_get_c(void)
 	
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-		// TOFIX: ARM
-		//tcnt = WAIT_TCNT;				// Copy first as counter keeps going on
-		//tcnt = 0; // ARM HACK - not implemented
 		tcnt = dsystick_getus();
 		t=_timer_time_us_monotonic;		
 	}
 	
-	// TCNT is at 11059200Hz. Convert tcnt to uS using approximate function
-	// TCNT is [0;10799]. TCNT=10800 is 976.5625uS
-	// Need to approximate: us = TCNT/11.0592 in a way which guarantees monotonicity
-	// Option 1: uS=TCNT/12: 10800=>uS, e=-76uS, monotonic
-	// Option 2: us=TCNT/11: 1080=>uS, e=+5uS, non monotonic
-	// Option 3: us=TCNT*1.44675/16 	-> *1.375/16
-	// Option 4: us=TCNT*2.89/32		-> 2.875/32	-> (3*t-1/8*t)/32
-	
-	
-	//t+=(tcnt*3-tcnt/8)/32;		// 2.875/32 * 10800 = 970.3125uS, monotonic e=-6.25uS (13uS function call)
 	t+=tcnt;
-	
-	// Simulate too fast increment to see wraparound
-	//t+=tcnt/2;
 	
 	
 	if(t>_timer_time_us_lastreturned)
 	{
 		_timer_time_us_lastreturned=t;
 	}
-	return _timer_time_us_lastreturned;				// (14uS  function call)
+	return _timer_time_us_lastreturned;				// Guaranteed monotonic
 	
-	//return t;		// Return time without guarantees monotonicity
 }
 
 /******************************************************************************

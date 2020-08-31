@@ -56,6 +56,7 @@
 /*#include "mode_bench.h"
 #include "mode_bt.h"*/
 #include "mode_rtc.h"
+#include "mode_rtcext.h"
 #include <mode_i2ctst.h>
 //#include "mode_mputest.h"
 #include "mode_mputest_n.h"
@@ -191,6 +192,10 @@ void mode_dispatch(void)
 				break;
 			case APP_MODE_DACTEST:
 				mode_dactest();
+				system_mode=APP_MODE_MAIN;
+				break;
+			case APP_MODE_RTC_EXT:
+				mode_rtcext();
 				system_mode=APP_MODE_MAIN;
 				break;
 			default:

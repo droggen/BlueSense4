@@ -80,23 +80,34 @@ unsigned char CommandParserx(char *buffer,unsigned char size)
 const COMMANDPARSER CommandParsersIdle[] =
 { 
 	{'H', CommandParserHelp,help_h},
+	{0,0,"---- RTC ----"},
 	{'T', CommandParserTime,help_t},
 	{'t', CommandParserDate,help_d},
-	{'r', CommandParserRTC,help_rtc},
+	{'Z',CommandParserSync,help_z},
+	{'R', CommandParserRTC,help_rtc},
+	{'r', CommandParserRTCExt,"External RTC functions"},
 
+	{0,0,"---- Power ----"},
+#if ENABLEMODECOULOMB==1
+	{'C', CommandParserCoulomb,help_coulomb},
+#endif
+	{'Q', CommandParserBatteryInfoLong,help_batterylong},
+	{'q', CommandParserBatteryInfo,help_battery},
+	{'O', CommandParserOff,help_O},
+	{'o', CommandParserOffPower,help_o},
 	//{'t', CommandParserTimeTest,help_timetest},
 	//{'r', CommandParserRTCTest,help_rtctest},
 
 	//{'1', CommandParser1,help_1},
 
 
-	//{'Z',CommandParserSync,help_z},
+
 	//{'z',CommandParserSyncFromRTC,help_zsyncfromrtc},
 	//{'Y',CommandParserTestSync,help_y},
 
 #if BUILD_BLUETOOTH==1
 #if DBG_RN41TERMINAL==1
-	{'R',CommandParserBT,help_r},
+	{'B',CommandParserBT,help_r},
 #endif
 #endif
 	//{'L',CommandParserLCD,help_l},
@@ -105,6 +116,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'t', CommandParserTime_Test,help_ttest},
 #endif
 	
+	{0,0,"---- Sensor ----"},
 	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging. No parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds. left_right: 0=left, 1=right, 2=stereo."},
 	{'s', CommandParserAudio,help_audio},
 
@@ -122,17 +134,11 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 	//{'G', CommandParserMotionRecog,help_g},
 	{'W', CommandParserSwap,help_w},
-	//{'O', CommandParserOff,help_O},
-	{'o', CommandParserOffPower,help_o},
+
 	{'F', CommandParserStreamFormat,help_f},
 	{'i', CommandParserInfo,help_info},
 	{'D', CommandParserModeDAC,"D[,sr,<frq0>,<vol0>[,<frq1>,<vol1>,...]]: DAC cosine waveform generation. sr: sample rate in Hz; vol: 0 to 4096; frqn: frequency in Hz\n\t\tNo parameters stops. Maximum sample rate is about 250KHz for 1 wavefom."},
 	{'d', CommandParserModeDACTest,"DAC test"},
-#if ENABLEMODECOULOMB==1
-	{'C', CommandParserCoulomb,help_coulomb},
-#endif
-	{'Q', CommandParserBatteryInfoLong,help_batterylong},
-	{'q', CommandParserBatteryInfo,help_battery},
 	{'c', CommandParserCallback,help_callback},
 	{'X', CommandParserSD,help_sd},
 	//{'p', CommandParserPowerTest,help_powertest},

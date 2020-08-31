@@ -95,6 +95,7 @@ unsigned char CommandParserClearBootCounter(char *buffer,unsigned char size);
 unsigned char CommandParserEEPROM(char *buffer,unsigned char size);
 unsigned char CommandParserBench(char *buffer,unsigned char size);
 unsigned char CommandParserRTC(char *buffer,unsigned char size);
+unsigned char CommandParserRTCExt(char *buffer,unsigned char size);
 unsigned char CommandParser1(char *buffer,unsigned char size);
 unsigned char CommandParserInterrupts(char *buffer,unsigned char size);
 unsigned char CommandParserI2CTest(char *buffer,unsigned char size);

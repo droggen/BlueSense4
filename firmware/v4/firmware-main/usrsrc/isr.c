@@ -48,7 +48,6 @@ void EXTI9_5_IRQHandler()
 
 
 
-
 /*void HAL_SD_TxCpltCallback(SD_HandleTypeDef *hsd)
 {
 	fprintf(file_pri,"SDTX\n");

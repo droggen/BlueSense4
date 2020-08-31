@@ -21,7 +21,6 @@
 #include "mode.h"
 #include "usrmain.h"
 #include "wait.h"
-/*#include "ds3232.h"*/
 #include "system.h"
 #include "system-extra.h"
 #include "uiconfig.h"
@@ -33,6 +32,7 @@
 #include "eeprom-m24.h"
 #include "power.h"
 #include "serial_itm.h"
+#include "max31343.h"
 
 //#include "ufat.h"
 
@@ -59,7 +59,7 @@ const char help_l[]  ="L,<en>: en=1 to enable LCD, 0 to disable";
 const char help_t[]  ="T[,<hh><mm><ss>] Query or set time";
 const char help_timetest[] = "t,<cmd>: cmd=0: print date/time continuously, 1: print backup registers";
 const char help_ttest[]  ="Time-related tests";
-const char help_d[]  ="D[,<dd><mm><yy>] Query or set date";
+const char help_d[]  ="t[,<dd><mm><yy>] Query or set date";
 const char help_quit[]  ="Exit current mode";
 const char help_h[]  ="Help";
 const char help_a[]  ="A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging mode until keypress or ! command.\n\t\tmask: ADC channel bitmask in hex (bits 0 to 4=ext channel, 5=vbat, 6=vref, 7=temp)\n\t\tperiod: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (should be used with only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tIf logfile is specified then logs data (use -1 to force streaming).\n\t\tIf duration specified streams/log for specified number of seconds.";
@@ -69,7 +69,7 @@ const char help_f[]  ="F,<bin>,<pktctr>,<ts>,<bat>,<label>: bin: 1 for binary, 0
 const char help_M[]  ="M[,<mode>[,<logfile>[,<duration>]]: without parameters lists available modes, otherwise enters the specified mode.\n\t\tOptionally logs to logfile (use -1 not to log) and runs for the specified duration in seconds.";
 const char help_m[]  ="MPU test mode";
 const char help_g[]  ="G,<mode> enters motion recognition mode. The parameter is the sample rate/channels to acquire. Use G? to find more about modes";
-const char help_O[]  ="O[,sec] Power off and no wakeup, or wakeup after sec seconds";
+const char help_O[]  ="O[,<sec>] Power off and no wakeup, or wakeup after <sec> seconds.";
 const char help_o[]  ="Display power used in off mode; if the node was turned off with O or with a hard reset";
 const char help_p[]  ="Store data to measure power in off mmodepower used in off mode; if the node was turned off with O";
 const char help_coulomb[]  ="Coulomb counter test mode";
@@ -84,7 +84,7 @@ const char help_powertest[] ="Power tests";
 const char help_callback[]  ="Lists timer callbacks";
 const char help_clearbootctr[]  ="Clear boot counter";
 const char help_eeprom[] = "EEPROM functions";
-const char help_rtc[] = "RTC functions";
+const char help_rtc[] = "Internal RTC functions";
 const char help_usbreinit[] = "USB reinit";
 const char help_interrupts[] = "Interrupt tryouts";
 const char help_i2c[] = "I2C tests";
@@ -212,7 +212,7 @@ unsigned char __CommandQuit=0;
 ******************************************************************************/
 unsigned char CommandParserSync(char *buffer,unsigned char size)
 {
-	/*if(size!=0)
+	if(size!=0)
 	{
 		// Parameters are passed: check validity
 		if(size!=13 || buffer[0]!=',')
@@ -238,16 +238,14 @@ unsigned char CommandParserSync(char *buffer,unsigned char size)
 		
 		
 		// Update the RTC date
-		if(ds3232_writedate_int(1,d,month,y))
+		if(rtc_writedatetime(1,d,month,y,h,m,s))
 			return 1;		
-		// Update the RTC time
-		if(ds3232_writetime(h,m,s))
-			return 1;
 		// Synchronise local time to RTC time
 		system_settimefromrtc();
 		return 0;
 	}
-	timer_init(0,0,0);*/
+	// No parameter - reset time to 0
+	timer_init(0,0,0);
 	return 0;
 }
 /*unsigned char CommandParserDate(char *buffer,unsigned char size)
@@ -529,48 +527,19 @@ unsigned char CommandParserSwap(char *buffer,unsigned char size)
 }
 unsigned char CommandParserOff(char *buffer,unsigned char size)
 {
-	/*unsigned char rv;
-	char *p1;
-	int sec;
-	rv = ParseComma((char*)buffer,1,&p1);
-	if(rv)
+	if(ParseCommaGetNumParam(buffer)==0)
 	{
-		fprintf_P(file_pri,PSTR("Shutting down, no wakeup\n"));
+		fprintf(file_pri,"Shutting down, no wakeup\n");
+		system_off();
 	}
-	else
-	{
-		if(sscanf(p1,"%u",&sec)!=1)
-		{
-			return 2;
-		}	
-		fprintf_P(file_pri,PSTR("Shutting down, wakeup in %d s\n"),sec);
-	}*/
-	/*return 0;
-	
-	fprintf_P(file_pri,PSTR("Shutting down in... "));
-	for(signed char i=3;i>=0;i--)
-	{
-		fprintf_P(file_pri,PSTR("%d... "),i);
-		_delay_ms(1000);		
-	}*/
-	
-	/*#if (HWVER==6) || (HWVER==7) || (HWVER==9)
-	// Get the battery state
-	ltc2942_backgroundgetstate(0);
-	// Wait for the read to occur
-	_delay_ms(100);
-	// Store the power off data
-	system_storepoweroffdata2();
-	// Setup alarm after the specified time
-	ds3232_printreg(file_pri);
-	ds3232_alarm_in(sec);
-	
-	
-	ds3232_printreg(file_pri);
-	_delay_ms(1000);
-	#endif
-	
-	system_off();*/
+	unsigned nsec;
+	if(ParseCommaGetUnsigned(buffer,1,&nsec))
+		return 2;
+
+	fprintf(file_pri,"Shutting down, with wakeup in %d seconds\n",nsec);
+	max31343_alarm_in(nsec);
+	system_off();
+
 	return 0;
 }
 unsigned char CommandParserOffPower(char *buffer,unsigned char size)
@@ -766,7 +735,7 @@ unsigned char CommandParserStreamFormat(char *buffer,unsigned char size)
 
 unsigned char CommandParserSyncFromRTC(char  *buffer,unsigned char size)
 {
-	//system_settimefromrtc();
+	system_settimefromrtc();
 	return 0;
 }
 unsigned char CommandParserTestSync(char *buffer,unsigned char size)
@@ -918,6 +887,12 @@ unsigned char CommandParserRTC(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 	CommandChangeMode(APP_MODE_RTC);
+	return 0;
+}
+unsigned char CommandParserRTCExt(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+	CommandChangeMode(APP_MODE_RTC_EXT);
 	return 0;
 }
 unsigned char CommandParserI2CTest(char *buffer,unsigned char size)

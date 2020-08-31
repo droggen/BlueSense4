@@ -7,6 +7,10 @@
 
 #include <stdio.h>
 
+
+
+
+
 FILE *file_usb,*file_pri,*file_bt,*file_itm,*file_dbg;
 
 

@@ -24,7 +24,7 @@ typedef struct {
 } LTC2942_BATSTAT;
 
 
-
+extern volatile unsigned _ltc2942_backgroundgetstate_ongoing;
 extern volatile unsigned long int _ltc2942_last_updatetime;
 extern volatile unsigned short _ltc2942_last_chargectr;			// Background read: charge counter (raw)
 extern volatile unsigned long _ltc2942_last_charge;				// Background read: charge (uAh)

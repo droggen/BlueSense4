@@ -19,18 +19,20 @@ void SysTick_Handler()
 	_timer_tick_1000hz();	// megalol systick handler
 }
 
-
+#if 0
 void systick_cb_1hz()
 {
 	_timer_tick_hz();
 }
+#endif
+
 unsigned char systick_cb_50hz(unsigned char t)
 {
 	(void)t;
 	_timer_tick_50hz();
 	return 0;
 }
-
+#if 0
 void dsystick_init()
 {
 	// Reset epoch
@@ -40,7 +42,7 @@ void dsystick_init()
 	//timer_register_callback(systick_cb_1hz,999);
 	timer_register_callback(systick_cb_50hz,19);
 }
-
+#endif
 void dsystick_clear()
 {
 	// Writing any value to VAL clears it to zero

@@ -22,9 +22,9 @@ unsigned char system_batterystat(unsigned char unused);
 /*void system_callback_battery_sample_init(void);
 unsigned char system_callback_battery_sample(unsigned char);*/
 unsigned short system_getbattery(void);
-/*unsigned long system_getbatterytime(void);
+/*unsigned long system_getbatterytime(void);*/
 void system_off(void);
-void system_power_low(void);
+/*void system_power_low(void);
 void system_power_normal(void);
 void system_adcpu_off(void);
 void system_adcpu_on(void);*/

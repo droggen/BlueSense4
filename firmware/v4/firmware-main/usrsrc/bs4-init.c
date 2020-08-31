@@ -13,13 +13,12 @@
 #include "serial_usb.h"
 #include "usrmain.h"
 #include "system-extra.h"
-#include "stmrtc.h"
+#include "rtcwrapper.h"
 //#include "stm32f4xx_exti.h"
 //#include "stm32f4xx_syscfg.h"
 #include "stm32l4xx.h"
 #include "mpu.h"
 #include "stmspi.h"
-/*#include "stmrtc.h"*/
 #include "bs4-init.h"
 #include "eeprom-m24.h"
 #include "m24xx.h"
@@ -33,7 +32,7 @@
 #include "sd/stm_sdio.h"
 #include "stmdfsdm.h"
 #include "uiconfig.h"
-#include "max31343.h"
+
 
 void testperiphvcc()
 {
@@ -128,13 +127,21 @@ void bs4_init_basic()
 
 void bs4_init_extended()
 {
+#if 1
+	fprintf(file_pri,"Checking EEPROM... ");
+	if(m24xx_isok())
+		fprintf(file_pri,"Ok\n");
+	else
+		fprintf(file_pri,"Fail\n");
+#endif
 	// Get number of boots
 	unsigned long numboot = eeprom_read_dword(STATUS_ADDR_NUMBOOT0,1,0);
 	fprintf(file_pri,"Boot %lu\n",numboot);
 	eeprom_write_dword(STATUS_ADDR_NUMBOOT0,numboot+1);
 
-
-	// Init RTC
+#if 0 // Legacy
+#if ENABLE_RTC_INTERNAL==1
+	// Init internal RTC
 	stmrtc_init();
 
 	// Default RTC irq handler calls the 1Hz timer
@@ -142,6 +149,44 @@ void bs4_init_extended()
 
 	// Set time from RTC
 	system_settimefromrtc();
+#endif
+#if ENABLE_RTC_EXTERNAL==1
+	// Init external RTC
+	fprintf(file_pri,"Checking external RTC... ");
+	if(max31343_isok())
+	{
+		fprintf(file_pri,"Ok\n");
+		fprintf(file_pri,"Init external RTC...\n");
+		max31343_init();
+
+		// Default RTC irq handler calls the 1Hz timer
+		max31343_setirqhandler(stmrtc_defaultirqhandler);
+
+		// Set time from RTC
+		system_settimefromrtc();
+	}
+	else
+		fprintf(file_pri,"Fail\n");
+#endif
+#endif
+	// Init RTC
+	fprintf(file_pri,"Checking %s RTC... ",rtc_name());
+	if(rtc_isok())
+	{
+		fprintf(file_pri,"Ok\n");
+		fprintf(file_pri,"Init %s RTC...\n",rtc_name());
+		rtc_init();
+
+		// Default RTC irq handler calls the 1Hz timer
+		rtc_setirqhandler(stmrtc_defaultirqhandler);
+
+		// Set time from RTC
+		system_settimefromrtc();
+	}
+	else
+		fprintf(file_pri,"Fail\n");
+
+
 
 
 	// -------------------------
@@ -172,21 +217,7 @@ void bs4_init_extended()
 
 
 
-#if 1
-	fprintf(file_pri,"Checking EEPROM... ");
-	if(m24xx_isok())
-		fprintf(file_pri,"Ok\n");
-	else
-		fprintf(file_pri,"Fail\n");
-#endif
 
-#if 1
-	fprintf(file_pri,"Checking external RTC... ");
-	if(max31343_isok())
-		fprintf(file_pri,"Ok\n");
-	else
-		fprintf(file_pri,"Fail\n");
-#endif
 
 	system_periphvcc_enable();
 	goto toto1;
@@ -280,7 +311,7 @@ toto1:
 	// Register the battery sample callback, and initiate an immediate read of the battery
 	ltc2942_backgroundgetstate(0);
 	timer_register_slowcallback(ltc2942_backgroundgetstate,9);		// Every 10 seconds get power
-	timer_register_50hzcallback(system_batterystat,4);				// Battery status at 10Hz			+  interface change detection	+ SD card change detection
+	timer_register_50hzcallback(system_batterystat,4);				// Battery status at 10Hz			+  interface change detection	+ SD card change detection + RTC interrupt clear
 	timer_register_slowcallback(system_lifesign,0);					// Low speed blinking
 
 

@@ -735,7 +735,7 @@ unsigned char ParseCommaGetUnsigned(const char *str,int n,...)
 		nonzero:	time wrapped around, return value indicates how many days?
 	
 ******************************************************************************/
-/*unsigned char TimeAddSeconds(unsigned short hour, unsigned short min, unsigned short sec, unsigned short ds,unsigned short *ohour, unsigned short *omin, unsigned short *osec)
+unsigned char TimeAddSeconds(unsigned short hour, unsigned short min, unsigned short sec, unsigned short ds,unsigned short *ohour, unsigned short *omin, unsigned short *osec)
 {
 	unsigned char day=0;
 	// No check on input values
@@ -761,7 +761,7 @@ unsigned char ParseCommaGetUnsigned(const char *str,int n,...)
 	return day;
 	
 }
-*/
+
 
 /******************************************************************************
 	Function: format3s16

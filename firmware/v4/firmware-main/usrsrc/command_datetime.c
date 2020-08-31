@@ -43,9 +43,8 @@ unsigned char CommandParserTime(char *buffer,unsigned char size)
 	if(size==0)
 	{
 		// Query time
-		stmrtc_readdatetime_conv_int(1,&h,&m,&s,0,0,0,0);
+		rtc_readdatetime_conv_int(1,&h,&m,&s,0,0,0,0);
 		fprintf(file_pri,"%02d:%02d:%02d\n",h,m,s);
-		//fprintf(file_pri,"%02d:%02d:%02d\n",0,0,0);
 		return 0;
 	}
 	// Set time
@@ -69,15 +68,12 @@ unsigned char CommandParserTime(char *buffer,unsigned char size)
 	}
 
 	// Execute
-	//unsigned char rv = stm32_writetime(h,m,s);
-	stm32_writetime(h,m,s);
-	unsigned char rv = 0;
-	//unsigned char rv = ds3232_writetime(h,m,s);
-	if(rv==0)
-		return 0;
+	unsigned char rv = rtc_writetime(h,m,s);
+	if(rv)
+		return 1;
 	// Synchronise local time to RTC time
-	//system_settimefromrtc();
-	return 1;
+	system_settimefromrtc();
+	return 0;
 }
 unsigned char CommandParser1(char *buffer,unsigned char size)
 {
@@ -94,11 +90,9 @@ unsigned char CommandParserDate(char *buffer,unsigned char size)
 	{
 		// Query date
 
-		stmrtc_readdatetime_conv_int(0,0,0,0,&wd,&d,&m,&y);
+		rtc_readdatetime_conv_int(0,0,0,0,&wd,&d,&m,&y);
 
-		//ds3232_readdate_conv_int(&d,&m,&y);
 		fprintf(file_pri,"(%d) %02d.%02d.%02d\n",wd,d,m,y);
-		//fprintf(file_pri,"%02d.%02d.%02d\n",0,0,0);
 		return 0;
 	}
 	// Set date
@@ -120,14 +114,13 @@ unsigned char CommandParserDate(char *buffer,unsigned char size)
 		return 2;
 	}
 
-	stm32_writedate(1,d,m,y);
-	unsigned char rv=0;
-	if(rv==0)
-		return 0;
+	unsigned char rv = rtc_writedate(1,d,m,y);
+	if(rv)
+		return 1;
 
 	// Synchronise local time to RTC time
-	//system_settimefromrtc();
-	return 1;
+	system_settimefromrtc();
+	return 0;
 }
 unsigned char CommandParserTimeTest(char *buffer,unsigned char size)
 {

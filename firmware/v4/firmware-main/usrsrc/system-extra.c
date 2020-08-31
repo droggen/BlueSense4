@@ -23,10 +23,12 @@
 #include "ltc2942.h"
 #include "eeprom-m24.h"
 #include "serial_itm.h"
-#include "stmrtc.h"
 #include "main.h"
 #include "interface.h"
 #include "ufat.h"
+//#include "stmrtc.h"
+//#include "max31343.h"
+#include "rtcwrapper.h"
 
 volatile unsigned char usb_must_enable=0;
 
@@ -66,14 +68,13 @@ volatile unsigned char usb_must_enable=0;
 ******************************************************************************/
 void system_settimefromrtc(void)
 {
+
 	unsigned char h,m,s;		// hour, minutes, seconds
 	unsigned char wd,day,month,year;
 	unsigned long t1;
 	
 	fprintf(file_pri,"Setting time from RTC... ");
-	
-	stmrtc_readdatetime_conv_int(1,&h,&m,&s,&wd,&day,&month,&year);
-	//ds3232_readdatetime_conv_int(1,&h,&m,&s,&day,&month,&year);
+	rtc_readdatetime_conv_int(1,&h,&m,&s,&wd,&day,&month,&year);
 	unsigned long epoch_s = ((day-1)*24l+h)*3600l+m*60l+s;
 	unsigned long epoch_s_frommidnight = h*3600l+m*60l+s;
 	unsigned long epoch_us = (m*60l+s)*1000l*1000l;
@@ -238,6 +239,10 @@ void system_adcpu_on(void)
 	If the power-button is pressed, the RED led turns on for the first 4 seconds, then 
 	starts blinking until power is cut.
 	
+	The MAX31343 RTC also appears as a push button press. Therefore, on the rising edge of system_buttonpress()
+	the RTC status register must be read. This clears the possible RTC interrupt. Faiure to do that results
+	in the power regulator turning off and staying off forever (until the RTC battery and USB power is removed).
+
 	Also handles storing battery state during power off.
 	If a long-press on the power button occurs:
 	- at 4 seconds, issues a background read of battery state.
@@ -310,6 +315,11 @@ unsigned char system_batterystat(unsigned char unused)
 		if(newpc==1)
 		{
 			system_led_on(0);
+
+			// Check whether the reason for the button input being asserted is an RTC interrupt.
+			// If it is max31343_background_read_status will clear the interrupt (and possibly power-off the system or perform some measurement)
+			// and the button input will be deasserted.
+			max31343_background_read_status();
 		}
 		else
 		{
@@ -389,34 +399,29 @@ unsigned char *system_getdevicename(void)
 {
 	return system_devname;
 }
-/*#if HWVER==1
-void system_off(void)
-{
-}
-#endif
-#if HWVER==4
-void system_off(void)
-{
-	// Clear PC7
-	PORTC&=0b01111111;
-}
-#endif
-#if HWVER==5
-void system_off(void)
-{
-	// Set PC7
-	PORTC|=0b10000000;
-}
-#endif
-#if (HWVER==6) || (HWVER==7) || (HWVER==9)
-void system_off(void)
-{
-	// Clear PC7
-	PORTC&=0b01111111;
-}
-#endif
 
-*/
+/******************************************************************************
+	function: system_off
+*******************************************************************************
+	Turn off the voltage regulator.
+
+	Reads the battery info and stores for off power measurements
+
+******************************************************************************/
+void system_off(void)
+{
+	// Initiates a background battery read
+	ltc2942_backgroundgetstate(0);
+	// Wait for the read to complete
+	while(_ltc2942_backgroundgetstate_ongoing);
+	// Store the battery info
+	system_storepowerdata(STATUS_ADDR_OFFCURRENT_VALID);
+	// Wait for the eeprom to finish writing - conservatively 50ms (5ms seems enough)
+	HAL_Delay(50);
+	// Turn off the regulator
+	HAL_GPIO_WritePin(PWR_ON_GPIO_Port,PWR_ON_Pin,GPIO_PIN_RESET);
+}
+
 
 /******************************************************************************
 	system_gettemperature

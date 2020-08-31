@@ -7,20 +7,7 @@
 #include "global.h"
 #include "eeprom-m24.h"
 
-/*
-	File: mpu
 
-	MPU9250 functions
-
-	The key functions are:
-
-	* mpu_init:					initialise the mpu
-	* mpu_config_motionmode:	selects the acquisition mode (which sensors are acquired and the sample rate) and whether "automatic read" into a memory buffer is performed.
-	* mpu_get_a:				blocking read of acceleration when not in automatic read (can also be used in automatic read).
-	* mpu_get_g:				blocking read of gyroscope when not in automatic read (can also be used in automatic read).
-	* mpu_get_agt:				blocking read of acceleration, gyroscope and temperature when not in automatic read (can also be used in automatic read).
-	* mpu_get_agmt:				blocking read of acceleration, acceleration, magnetic field and temperature when not in automatic read (can also be used in automatic read).
-	*/
 
 /******************************************************************************
 	file: stmdfsdm

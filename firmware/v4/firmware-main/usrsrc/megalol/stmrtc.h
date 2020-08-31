@@ -8,34 +8,7 @@
 #define STMRTC_HAL 0
 #define STMRTC_LL 1
 
-//#if STMRTC_LL==1
-//#include "stm32f4xx_ll_rtc.h"
-//#include "rtc.h"
-//#endif
-//#if STMRTC_HAL==1
-//#include "stm32f4xx_hal_rtc.h"
-//#include "rtc.h"
-//#endif
 
-
-//#include "i2c.h"
-
-/*#define DS3232_ADDRESS 104
-
-
-
-void ds3232_init(void);
-unsigned char ds3232_bcd2dec(unsigned char bcd);
-unsigned char ds3232_readtime_sync(unsigned char *time);
-unsigned char ds3232_readtime_sqwsync(unsigned char *time);
-unsigned char ds3232_readtime(unsigned char *time);
-unsigned char ds3232_readtime_sync_conv(unsigned char *hour,unsigned char *min,unsigned char *sec);
-unsigned char ds3232_readtime_conv(unsigned char *hour,unsigned char *min,unsigned char *sec);
-unsigned char ds3232_readdate_conv(unsigned char *date,unsigned char *month,unsigned char *year);
-void ds3232_convtime(unsigned char *val,unsigned char *hour,unsigned char *min,unsigned char *sec);
-unsigned char ds3232_write_control(unsigned char val);
-unsigned char ds3232_write_status(unsigned char val);
-*/
 #define STMRTC_BIN2BCD(__VALUE__) (uint32_t)((((__VALUE__) / 10U) << 4U) | ((__VALUE__) % 10U))
 #define STMRTC_BCD2BIN(__VALUE__) (uint32_t)(((uint8_t)((__VALUE__) & (uint8_t)0xF0U) >> (uint8_t)0x4U) * 10U + ((__VALUE__) & (uint8_t)0x0FU))
 
@@ -55,13 +28,10 @@ unsigned stmrtc_getbkpreg(unsigned reg);
 void stmrtc_setbkpreg(unsigned reg,unsigned val);
 unsigned stmrtc_waspowerlost(void);
 void stmrtc_set24hr();
-//unsigned int stm32_writetime_st(unsigned int hour,unsigned int min,unsigned int sec);
-void stm32_writetime(unsigned int hour,unsigned int min,unsigned int sec);
-//unsigned char stm32_writedate_st(unsigned char weekday,unsigned char day,unsigned char month,unsigned char year);
-void stm32_writedate(unsigned char weekday,unsigned char day,unsigned char month,unsigned char year);
+void stmrtc_writetime(unsigned int hour,unsigned int min,unsigned int sec);
+void stmrtc_writedate(unsigned char weekday,unsigned char day,unsigned char month,unsigned char year);
 void stmrtc_writedatetime(unsigned char weekday,unsigned char day,unsigned char month,unsigned char year,unsigned int hour,unsigned int min,unsigned int sec);
 unsigned char stmrtc_readdatetime_conv_int(unsigned char sync, unsigned char *hour,unsigned char *min,unsigned char *sec,unsigned char *weekday,unsigned char *day,unsigned char *month,unsigned char *year);
-unsigned char stmrtc_readdatetime_conv_int_legacy(unsigned char sync, unsigned char *hour,unsigned char *min,unsigned char *sec,unsigned char *day,unsigned char *month,unsigned char *year);
 void stm_sync();
 void stmrtc_enablebypass(unsigned bypass);
 void stmrtc_formatdatetime(char *buffer,unsigned char weekday,unsigned char day,unsigned char month,unsigned char year,unsigned int hour,unsigned int min,unsigned int sec);

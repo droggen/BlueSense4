@@ -27,6 +27,7 @@
 #define APP_MODE_ADCTEST 23
 #define APP_MODE_SAMPLEMULTIMODAL 24
 #define APP_MODE_DACTEST 25
+#define APP_MODE_RTC_EXT 26
 
 void mode_dispatch(void);
 
