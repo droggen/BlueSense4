@@ -708,17 +708,17 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	if(0)
 	{	// Increase the baud rate
 		rn41_SetTempBaudrate(file,filebt,"230K");
-		serial_uart_init_ll(230400);
+		serial_uart_changespeed(230400);
 	}
 	if(1)
 	{	// Increase the baud rate
 		rn41_SetTempBaudrate(file,filebt,"460K");
-		serial_uart_init_ll(460800);
+		serial_uart_changespeed(460800);
 	}
 	if(0)
 	{	// Increase the baud rate
 		rn41_SetTempBaudrate(file,filebt,"921K");
-		serial_uart_init_ll(921600);
+		serial_uart_changespeed(921600);
 	}
 
 	rn41_CmdLeave(file,filebt);

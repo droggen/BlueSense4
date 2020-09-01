@@ -227,7 +227,7 @@ unsigned short buffer_level(volatile CIRCULARBUFFER *io)
 	unsigned short l;
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-	l = ((io->wrptr-io->rdptr)&io->mask);
+		l = ((io->wrptr-io->rdptr)&io->mask);
 	}
 	return l;
 }

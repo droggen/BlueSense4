@@ -206,6 +206,41 @@ FM Duty2: Tclk=20ns @ 20MHz
 
 
  */
+/*
+STM32L4 - 100KHZ with APB1=16MHz
+I2C registers:
+	CR1: 00000001
+	CR2: 020C04C8
+	OAR1: 00008000
+	OAR2: 00000000
+	TIMINGR: 00303D5B
+	TIMEOUTR: 00000000
+	ISR: 00000001
+	PECR: 00000000
+	RXDR: 00000040
+	TXDR: 00000002
+Bus speed:
+	HCLK: 32000000
+	PCLK1: 16000000
+	PCLK2: 16000000
+
+ST32L4 - 400KHz with APB1=16MHz
+I2C registers:
+	CR1: 00000001
+	CR2: 020C04C8
+	OAR1: 00008000
+	OAR2: 00000000
+	TIMINGR: 0010061A
+	TIMEOUTR: 00000000
+	ISR: 00000001
+	PECR: 00000000
+	RXDR: 00000080
+	TXDR: 00000002
+Bus speed:
+	HCLK: 32000000
+	PCLK1: 16000000
+	PCLK2: 16000000
+*/
 void i2c_printconfig(void)
 {
 #if 0
@@ -250,7 +285,7 @@ void i2c_init(void)
 
 	// Initialisation on ARM
 	/*I2C1->CR1=0x00000000;	// Default reset value - control register - peripheral deactivated
-	I2C1->CR2=0x00000000;	// Default reset value - control register
+	I2C1->CdR2=0x00000000;	// Default reset value - control register
 	I2C1->OAR1=0x00000000;	// Default reset value - own address
 	I2C1->OAR2=0x00000000;	// Default reset value - own address
 	I2C1->CCR=0x00000000;	// Default reset value - clock control register

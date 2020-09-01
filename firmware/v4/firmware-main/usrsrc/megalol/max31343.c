@@ -534,7 +534,7 @@ unsigned char __max31343_trans_read_status_done(I2C_TRANSACTION *t)
 {
 	(void)t;
 
-	fprintf(file_pri,"RTC status: %02X\n",t->data[0]);
+	//fprintf(file_pri,"RTC status: %02X\n",t->data[0]);
 	//for(int i=0;i<7;i++)
 		//fprintf(file_pri,"%02X ",t->data[i]);
 	//fprintf(file_pri,"\n");

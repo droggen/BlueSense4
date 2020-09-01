@@ -14,25 +14,10 @@
 //#include "adc.h"
 #include "serial.h"
 #include "i2c.h"
-//#include "ds3232.h"
 #if BUILD_BLUETOOTH==1
 #include "rn41.h"
 #include "mode_bt.h"
 #endif
-//#include "mpu.h"
-//#include "mpu_test.h"
-//#include "pkt.h"
-//#include "wait.h"
-//#include "init.h"
-//#include "lcd.h"
-//#include "fb.h"
-//#include "uiconfig.h"
-//#include "helper.h"
-//#include "i2c_internal.h"
-//#include "system.h"
-//#include "pkt.h"
-//#include "sd.h"
-//#include "ufat.h"
 
 #include "commandset.h"
 #include "mode_adc.h"
@@ -196,6 +181,10 @@ void mode_dispatch(void)
 				break;
 			case APP_MODE_RTC_EXT:
 				mode_rtcext();
+				system_mode=APP_MODE_MAIN;
+				break;
+			case APP_MODE_SERIALTEST:
+				mode_serialtest();
 				system_mode=APP_MODE_MAIN;
 				break;
 			default:

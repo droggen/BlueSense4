@@ -96,23 +96,23 @@ void mode_bt(void)
 							{
 								case '1':
 									fprintf(file_usb,"<Setting serial to 115.2kbps>\n");
-									serial_uart_init_ll(115200);
+									serial_uart_changespeed(115200);
 									break;
 								case '2':
 									fprintf(file_usb,"<Setting serial to 230.4kbps>\n");
-									serial_uart_init_ll(230400);
+									serial_uart_changespeed(230400);
 									break;
 								case '4':
 									fprintf(file_usb,"<Setting serial to 460.8kbps>\n");
-									serial_uart_init_ll(460800);
+									serial_uart_changespeed(460800);
 									break;
 								case '5':
 									fprintf(file_usb,"<Setting serial to 57.6kbps>\n");
-									serial_uart_init_ll(57600);
+									serial_uart_changespeed(57600);
 									break;
 								case '9':
 									fprintf(file_usb,"<Setting serial to 921.6kbps>\n");
-									serial_uart_init_ll(921600);
+									serial_uart_changespeed(921600);
 									break;
 								case 'R':
 									fprintf(file_usb,"<Resetting BT>\n");
@@ -183,10 +183,11 @@ void mode_bt(void)
 				fwrite(r,1,nr,file_usb);
 		}
 		while(nr);
-		/*
+
 		// Alternative using fgtec
-		while((c=fgetc(file_bt))!=-1)
+		/*while((c=fgetc(file_bt))!=-1)
 		{
+			//HAL_Delay(1);
 			fputc(c,file_usb);
 		}*/
 

@@ -29,6 +29,9 @@ char _serial_uart_param_used[SERIALUARTNUMBER];
 // Memory for the circular buffers
 unsigned char _serial_uart_rx_buffer[SERIALUARTNUMBER][SERIAL_UART_RX_BUFFERSIZE];
 unsigned char _serial_uart_tx_buffer[SERIALUARTNUMBER][SERIAL_UART_TX_BUFFERSIZE];
+// DMA buffers
+volatile unsigned char _serial_uart_rx_dma_buffer[SERIAL_UART_DMA_RX_BUFFERSIZE];
+
 
 volatile unsigned long Serial1DOR=0;				// Data overrun
 volatile unsigned long Serial1NR=0;					//
@@ -37,6 +40,9 @@ volatile unsigned long Serial1PE=0;					//
 volatile unsigned long Serial1TXE=0;					//
 volatile unsigned long Serial1RXNE=0;					//
 volatile unsigned long Serial1CTS=0;					//
+volatile unsigned long Serial1Idle=0;					//
+volatile unsigned long Serial1DMARXOverrun=0;			//
+volatile unsigned long Serial1DMARXInt=0;
 volatile unsigned long Serial1Int=0;					// Total interrupt
 volatile unsigned long Serial1EvtWithinInt=0;		// Counts if there is a new int-triggering flag set during the interrupt process, could be used to speed up
 
@@ -56,7 +62,7 @@ int staticalloc_alloc(char *allocmap,int max)
 
 
 /******************************************************************************
-	serial_open
+	serial_open_uart
 *******************************************************************************
 	Opens a serial communication peripheral.
 
@@ -79,7 +85,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 {
 	FILE *f=0;
 
-	int p = serial_uart_init(periph,1);
+	int p = serial_uart_init(periph,1);			// 1 for DMA; 0 for interrupt
 
 	//itmprintf("aft serial_uart_init\n");
 
@@ -114,22 +120,12 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
 
-
-	//serial_associate(f,sp);			// Use big hack with f->_cookie below
-
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
 	f->_cookie = sp;
 
 
-	//fdev_set_udata(f,(void*)p);
-	//if(serial_numopen==0)
-	//{
-		// Assign standard io
-		//stdin = f;
-		//stdout = f;
-		//stderr = f;
-	//}
-	//serial_numopen++;
+
+
 
 
 	return f;
@@ -138,7 +134,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 // Init uart
 // -1: error
 // >=0 ok
-int serial_uart_init(USART_TypeDef *h,int interrupt)
+int serial_uart_init(USART_TypeDef *h,int dma1_or_int0)
 {
 	//fprintf(file_pri,"serial_uart_init\n");
 	// Static allocate a data structure
@@ -146,31 +142,25 @@ int serial_uart_init(USART_TypeDef *h,int interrupt)
 	if(a==-1)	// Allocation failed
 		return -1;
 
-	// Initialise the hardware
-
-
-	//itmprintf("serial_uart_init: ok (%d)\n",a);
 
 	// Initialise the circular buffers with the data buffers
 	buffer_init(&_serial_uart_param[a].rxbuf,_serial_uart_rx_buffer[a],SERIAL_UART_RX_BUFFERSIZE);
 	buffer_init(&_serial_uart_param[a].txbuf,_serial_uart_tx_buffer[a],SERIAL_UART_TX_BUFFERSIZE);
 
-	// Initialise the handle
+	// Initialise the high-level data structure
 	_serial_uart_param[a].device = h;
-
-
 	_serial_uart_param[a].blocking = 0;
 	_serial_uart_param[a].bufferwhendisconnected = 0;
 	_serial_uart_param[a].putbuf = &serial_uart_putbuf;
 	_serial_uart_param[a].fischar = &serial_uart_fischar;
+	_serial_uart_param[a].dma1_or_int0 = dma1_or_int0;
 
-	// Initialise the interrupts
+	// Initialise the hardware
+	serial_uart_init_ll(dma1_or_int0);
 	//itmprintf("before ie\n");
 	//fprintf(file_pri,"about to enable interrupt\n");
-	if(interrupt)
-	{
-		serial_usart_interruptenable(h);
-	}
+	//serial_usart_interruptenable(h);
+
 	//itmprintf("after ie\n");
 	//fprintf(file_pri,"after enable interrupt\n");
 
@@ -194,25 +184,6 @@ int serial_uart_findparam(USART_TypeDef *h)
 	return -1;
 }
 
-//SERIAL_UART_HANDLE huart2;
-
-//void USART2_IRQHandler(void)
-//{
-	//itmprintf("usart2irq\n");
-
-  /* USER CODE BEGIN USART2_IRQn 0 */
-
-  /* USER CODE END USART2_IRQn 0 */
-  //HAL_UART_IRQHandler(&huart2);
-  /* USER CODE BEGIN USART2_IRQn 1 */
-
-  /* USER CODE END USART2_IRQn 1 */
-//}
-
-/*void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-	itmprintf("txcb\n");
-}*/
 
 /******************************************************************************
    function: serial_usart_txempty
@@ -342,20 +313,19 @@ int serial_usart_getchar_nonblock(USART_TypeDef *h)
 }
 
 
-void serial_usart_interruptenable(USART_TypeDef *h)
+/*void serial_usart_interruptenable(USART_TypeDef *h)
 {
 	fprintf(file_pri,"In interrupt enable %p\n",h);
 	HAL_Delay(100);
+
+
 	// RX, TX interrupt enable
-
-
-
 	h->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
 
 	fprintf(file_pri,"RN\n",h);
 	HAL_Delay(100);
 
-	h->CR1 |= USART_CR1_RXNEIE;			// RX not empty interrupt enable
+	//h->CR1 |= USART_CR1_RXNEIE;			// RX not empty interrupt enable
 
 	fprintf(file_pri,"CTS\n",h);
 		HAL_Delay(100);
@@ -363,7 +333,7 @@ void serial_usart_interruptenable(USART_TypeDef *h)
 	h->CR3 |= USART_CR3_CTSIE;		// Enable CTS interrupt
 
 
-}
+}*/
 /******************************************************************************
 	serial_uart_cookiewrite_block
 *******************************************************************************
@@ -397,51 +367,6 @@ void serial_usart_interruptenable(USART_TypeDef *h)
 }*/
 
 
-
-/*void serial_uart2_init()
-{
-	huart2.Instance = USART2;			// Base address of the USART
-
-	//Desired parameters:
-	//	huart2.Init.BaudRate = 115200;
-	//	huart2.Init.WordLength = UART_WORDLENGTH_8B;
-	//	huart2.Init.StopBits = UART_STOPBITS_1;
-	//	huart2.Init.Parity = UART_PARITY_NONE;
-	//	huart2.Init.Mode = UART_MODE_TX_RX;
-	//	huart2.Init.HwFlowCtl = UART_HWCONTROL_RTS_CTS;
-	//	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-
-
-	// USART2 clock enable
-	__HAL_RCC_USART2_CLK_ENABLE();
-	__HAL_RCC_GPIOA_CLK_ENABLE();
-
-	//USART2 GPIO Configuration
-	//PA0-WKUP     ------> USART2_CTS
-	//PA1     ------> USART2_RTS
-	//PA2     ------> USART2_TX
-	//PA3     ------> USART2_RX
-
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-	GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_PULLUP;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	// USART2 interrupt Init
-	HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(USART2_IRQn);
-
-}*/
 
 
 int serial_uart_gettxbuflevel(int p)
@@ -479,6 +404,9 @@ void serial_usart_irq(USART_TypeDef *h)
 
 	unsigned sr = h->ISR;			// Get SR once
 
+	//fprintf(file_pri,"IRQ %08X\n",sr);
+	//fprintf(file_pri,"I\n");
+
 	// Find the data structure corresponding to the UART
 	int p = serial_uart_findparam(h);
 
@@ -500,6 +428,14 @@ void serial_usart_irq(USART_TypeDef *h)
 
 	// Find interrupt type
 
+	// IDLE interrupt occur when no data is received - trigger a check of the RX DMA buffer
+	if(sr & USART_ISR_IDLE)
+	{
+		Serial1Idle++;
+		h->ICR|=USART_ICR_IDLECF;
+		serial_uart_dma_rx(p);
+	}
+
 	// CTS interrupt
 	if(sr & USART_ISR_CTSIF)
 	{
@@ -507,7 +443,7 @@ void serial_usart_irq(USART_TypeDef *h)
 		h->ICR|=USART_ICR_CTSCF;
 	}
 
-	// RX interrupt?
+	// RX interrupt - used only in non-DMA mode
 	if(sr & USART_ISR_RXNE)
 	{
 		char c = h->RDR;
@@ -525,16 +461,8 @@ void serial_usart_irq(USART_TypeDef *h)
 	{
 		// Overrun error
 		//itmprintf("\tORE\n");
-#if 0
-		// STM32F4: Clear the interrupt by reading SR (done) and reading DR
-		char c = h->DR;
-		(void)c;
-#endif
-
-#if 1
 		// STM32L4: clear by writing 1 to ORECF in ICR
 		h->ICR=USART_FLAG_ORE;
-#endif
 
 		// Increment the overrun counter
 		Serial1DOR++;
@@ -609,9 +537,106 @@ void serial_usart_irq(USART_TypeDef *h)
 		//itmprintf("%04X\n",sr);
 		Serial1EvtWithinInt++;
 	}
+}
+/******************************************************************************
+	function: serial_usart_dma_rx_irq
+*******************************************************************************
+	IRQ handler for UART DMA.
 
+	Note: called from DMA1_Channel6_IRQHandler in Src/stm32l4xx_it.c
+
+
+
+	Return value:	-
+******************************************************************************/
+void serial_usart_dma_rx_irq()
+{
+	Serial1DMARXInt++;		// Increment the DMA RX interrupt counter
+
+	//fprintf(file_pri,"D\n");
+	/*fprintf(file_pri,"DMA IRQ:\n");
+	for(int i=0;i<10;i++)
+	{
+		uint32_t datlen = LL_DMA_GetDataLength(DMA1, LL_DMA_CHANNEL_6);
+
+		fprintf(file_pri,"\t %d\n",datlen);
+	}*/
+
+	// Check half-transfer complete interrupt
+	if (LL_DMA_IsEnabledIT_HT(DMA1, LL_DMA_CHANNEL_6) && LL_DMA_IsActiveFlag_HT6(DMA1))
+	{
+		//fprintf(file_pri,"HT\n");
+		LL_DMA_ClearFlag_HT6(DMA1);             	// Clear half-transfer complete flag
+		serial_uart_dma_rx(0);
+	}
+
+	// Check transfer-complete interrupt
+	if (LL_DMA_IsEnabledIT_TC(DMA1, LL_DMA_CHANNEL_6) && LL_DMA_IsActiveFlag_TC6(DMA1))
+	{
+		//fprintf(file_pri,"TC\n");
+		LL_DMA_ClearFlag_TC6(DMA1);             // Clear transfer complete flag
+		serial_uart_dma_rx(0);
+	}
 
 }
+
+void serial_uart_dma_rx(unsigned char serialid)
+{
+	static unsigned old_pos=0;			// Index of the first byte of the DMA buffer to transmit to the larger ring buffer.
+
+	//fprintf(file_pri,"R\n");
+
+	// Check if DMA is activated - this function could be called when "idle" if DMA isn't activated yet
+	if(!LL_USART_IsEnabledDMAReq_RX(USART2))
+	{
+		//fprintf(file_pri,"rx_check: dma not active\n");
+		return;
+	}
+
+
+	// LL_DMA_GetDataLength: returns how many bytes left before wrapping around. Successive calls show decreasing values until wrapping around
+	unsigned datleft=(unsigned)LL_DMA_GetDataLength(DMA1, LL_DMA_CHANNEL_6);
+	unsigned pos = SERIAL_UART_DMA_RX_BUFFERSIZE-datleft;
+
+	//fprintf(file_pri,"datleft: %d. copy from %d incl to %d excl\n",datleft,old_pos,pos);
+
+	// Check how much space is left in the buffer
+	unsigned freespace = buffer_freespace(&_serial_uart_param[serialid].rxbuf);
+	// If the space is below the DMA buffer size -> clear RTS
+	if(freespace<SERIAL_UART_DMA_RX_BUFFERSIZE)
+		_serial_usart_rts_clear();
+	while(old_pos!=pos)
+	{
+		// Get data at position pos
+		unsigned char c = _serial_uart_rx_dma_buffer[old_pos];
+		//fprintf(file_pri,"%c",c);
+		// Add the character to the ring buffer if space available
+		// If rx buffer full: choose to lose rx data
+
+		/*
+		// Implementation calling isfull everytime - more expensive than relying on freespace
+		if(!buffer_isfull(&_serial_uart_param[serialid].rxbuf))
+			buffer_put(&_serial_uart_param[serialid].rxbuf,c);
+		else
+			Serial1DMARXOverrun++;*/
+		// Implementation relying on freespace
+		if(freespace)
+		{
+			buffer_put(&_serial_uart_param[serialid].rxbuf,c);
+			freespace--;
+		}
+		else
+			Serial1DMARXOverrun++;
+
+		// If the amount of free space in the ring buffer decreases below the DMA buffer size -> must deactivate RTS
+
+		// Increment wrapping around
+		old_pos=(old_pos+1)&(SERIAL_UART_DMA_RX_BUFFERSIZE-1);
+
+
+	}
+}
+
 
 /******************************************************************************
 	uart1_fputchar_block_int
@@ -810,6 +835,13 @@ ssize_t serial_uart_cookieread_int(void *__cookie, char *__buf, size_t __n)
 			break;
 	}
 
+	// If DMA mode, set RTS if enough space
+	if(sp->dma1_or_int0)
+	{
+		if(buffer_freespace(&sp->rxbuf)>=SERIAL_UART_DMA_RX_BUFFERSIZE)
+			_serial_usart_rts_set();
+	}
+
 	// If no data, should return error (-1) instead of eof (0).
 	// Returning eof has side effects on subsequent calls to fgetc: it returns eof forever, until some write is done.
 	if(nr==0)
@@ -892,6 +924,152 @@ int serial_uart_txbufferfree(int p)
 {
 	return buffer_freespace(&_serial_uart_param[p].txbuf);
 }
+/******************************************************************************
+	function: serial_uart_init_ll
+*******************************************************************************
+	Low-level UART initialisation - replaces CubeMX initialisation code.
+
+	Initialisation with RX via DMA and TX via interrupts.
+
+	Info on DMA: https://github.com/MaJerle/stm32-usart-uart-dma-rx-tx/blob/master/projects/usart_rx_idle_line_irq_L4/Src/main.c
+
+	Parameters:
+		dma1_or_int0		-		1 for RX by DMA; 0 for RX by interrupt
+
+
+******************************************************************************/
+void serial_uart_init_ll(int dma1_or_int0)
+{
+	LL_USART_InitTypeDef USART_InitStruct = {0};
+	LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	/* Peripheral clock enable */
+	LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_USART2);
+	LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+
+	/**USART2 GPIO Configuration
+	PA0   ------> USART2_CTS
+	PA1   ------> USART2_RTS
+	PA2   ------> USART2_TX
+	PA3   ------> USART2_RX
+	*/
+	// Set TX, RX and CTS to alternate mode
+	GPIO_InitStruct.Pin = LL_GPIO_PIN_0|LL_GPIO_PIN_2|LL_GPIO_PIN_3;
+	GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+	GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+	GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+	GPIO_InitStruct.Alternate = LL_GPIO_AF_7;
+	LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	if(dma1_or_int0==0)
+	{
+		// If interrupt mode, set RTS to alternate mode
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_1;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		GPIO_InitStruct.Alternate = LL_GPIO_AF_7;
+		LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	}
+	else
+	{
+		// If DMA mode, set RTS to manual
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_1;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+		// Set RTS to 1
+		_serial_usart_rts_set();
+	}
+
+
+
+	// USART2 DMA RX init
+	if(dma1_or_int0 == 1)
+	{
+		LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_6, LL_DMA_REQUEST_2);
+		LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_6, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+		LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_6, LL_DMA_PRIORITY_LOW);
+		LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_6, LL_DMA_MODE_CIRCULAR);
+		LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_6, LL_DMA_PERIPH_NOINCREMENT);
+		LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_6, LL_DMA_MEMORY_INCREMENT);
+		LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_6, LL_DMA_PDATAALIGN_BYTE);
+		LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_6, LL_DMA_MDATAALIGN_BYTE);
+		LL_DMA_SetPeriphAddress(DMA1, LL_DMA_CHANNEL_6, (uint32_t)&USART2->RDR);
+		LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_6, (uint32_t)_serial_uart_rx_dma_buffer);		// Buffer to receive data
+		LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_6, SERIAL_UART_DMA_RX_BUFFERSIZE);								// Buffer size
+
+		// Enable HT & TC interrupts
+		LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_6);
+		LL_DMA_EnableIT_TC(DMA1, LL_DMA_CHANNEL_6);
+	}
+
+
+	// USART configuration
+	USART_InitStruct.BaudRate = 115200;
+	USART_InitStruct.DataWidth = LL_USART_DATAWIDTH_8B;
+	USART_InitStruct.StopBits = LL_USART_STOPBITS_1;
+	USART_InitStruct.Parity = LL_USART_PARITY_NONE;
+	USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
+#warning TODO: reactivate RTC and CTS
+	if(dma1_or_int0 == 0)
+	{
+		USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS_CTS;
+	}
+	else
+	{	// DMA mode -> only CTS (flow control for transfer) for now
+		USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_CTS;
+	}
+	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
+	USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
+	ErrorStatus status = LL_USART_Init(USART2, &USART_InitStruct);
+	if(status == ERROR)
+		fprintf(file_pri,"Error init USART\n");
+	LL_USART_ConfigAsyncMode(USART2);
+
+	if(dma1_or_int0 == 1)
+		LL_USART_EnableDMAReq_RX(USART2);
+
+	LL_USART_EnableIT_TXE(USART2);
+	LL_USART_EnableIT_CTS(USART2);
+	if(dma1_or_int0 == 0)
+		LL_USART_EnableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
+	if(dma1_or_int0 == 1)
+		LL_USART_EnableIT_IDLE(USART2);			// RX DMA -> Enable idle interrupt
+
+#if 0	// Legacy
+	// RX, TX interrupt enable
+	h->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+
+	fprintf(file_pri,"RN\n",h);
+	HAL_Delay(100);
+
+	//h->CR1 |= USART_CR1_RXNEIE;			// RX not empty interrupt enable
+
+	fprintf(file_pri,"CTS\n",h);
+		HAL_Delay(100);
+
+	h->CR3 |= USART_CR3_CTSIE;		// Enable CTS interrupt
+#endif
+
+
+
+	// USART interrupt activated anyways
+	NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
+	NVIC_EnableIRQ(USART2_IRQn);
+
+
+	// Enable DMA
+	if(dma1_or_int0 == 1)
+		LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_6);
+
+	// Enable USART
+	LL_USART_Enable(USART2);
+}
 
 /*
 Test when issuing H to RN41: counter
@@ -906,7 +1084,7 @@ RTS: output of STM32 indicating readiness to receive data. RTS prevents receive 
 
 */
 // Speed: 115200, etc.
-void serial_uart_init_ll(int speed)
+void serial_uart_changespeed(int speed)
 {
 	LL_USART_InitTypeDef USART_InitStruct = {0};
 
@@ -915,8 +1093,8 @@ void serial_uart_init_ll(int speed)
 	USART_InitStruct.StopBits = LL_USART_STOPBITS_1;
 	USART_InitStruct.Parity = LL_USART_PARITY_NONE;
 	USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
-	USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS_CTS;
-	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
+	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS_CTS;
+	USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
 	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS;
 	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_CTS;
 	USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
@@ -971,6 +1149,9 @@ void serial_uart_printevents(FILE *f)
 	fprintf(f,"\tRXNE: %lu\n",Serial1RXNE);
 	fprintf(f,"\tTXE: %lu\n",Serial1TXE);
 	fprintf(f,"\tCTS: %lu\n",Serial1CTS);
+	fprintf(f,"\tIdle: %lu\n",Serial1Idle);
+	fprintf(f,"\tDMARXOverrun: %lu\n",Serial1DMARXOverrun);
+	fprintf(f,"\tDMARXInt: %lu\n",Serial1DMARXInt);
 	fprintf(f,"\tEvents during interrupt: %lu\n",Serial1EvtWithinInt);
 }
 void serial_uart_clearevents()
@@ -982,7 +1163,32 @@ void serial_uart_clearevents()
 	Serial1TXE = 0;
 	Serial1RXNE = 0;
 	Serial1CTS=0;
+	Serial1Idle=0;
+	Serial1DMARXOverrun=0;
+	Serial1DMARXInt=0;
 	Serial1EvtWithinInt = 0;
 	Serial1Int=0;
 }
+
+void _serial_usart_rts_set()
+{
+	// STM: RTS is an nRtS -> setting RTS resets the pin
+	if(LL_GPIO_IsOutputPinSet(GPIOA,LL_GPIO_PIN_1))
+	{
+		LL_GPIO_ResetOutputPin(GPIOA,LL_GPIO_PIN_1);
+		//fprintf(file_pri,"*R\n");
+	}
+}
+void _serial_usart_rts_clear()
+{
+	//return;
+	// STM: RTS is an nRtS -> clearing RTS sets the pin
+	if(!LL_GPIO_IsOutputPinSet(GPIOA,LL_GPIO_PIN_1))
+	{
+		LL_GPIO_SetOutputPin(GPIOA,LL_GPIO_PIN_1);
+		//fprintf(file_pri,"*r\n");
+	}
+
+}
+
 

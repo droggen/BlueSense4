@@ -220,7 +220,7 @@ void bs4_init_extended()
 
 
 	system_periphvcc_enable();
-	goto toto1;
+
 
 #if BUILD_BLUETOOTH==1
 	// Open serial BT usart file

@@ -46,6 +46,7 @@ typedef struct _SERIALPARAM
 {
 	unsigned char blocking;
 	unsigned char bufferwhendisconnected;
+	unsigned char dma1_or_int0;
 	CIRCULARBUFFER txbuf;
 	CIRCULARBUFFER rxbuf;
 

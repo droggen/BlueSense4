@@ -56,6 +56,7 @@
 #include "mode_sample_sound.h"
 #include "mode_sample_multimodal.h"
 #include "mode_dac.h"
+#include "mode_serial.h"
 
 #include "system-extra.h"
 
@@ -165,6 +166,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 
 	{'k', CommandParserBenchmarkCPU,help_benchmark_cpu},
+	{'-', CommandParserModeSerial,"Serial test mode"},
 
 
 };

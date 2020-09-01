@@ -16,8 +16,8 @@
 // 7-bit address
 #define MAX31343_ADDRESSS 0x68
 // Time is updated 1 second after writing to date/time registers - delay in millisecond to wait until time is updated
-//#define MAX31341_WAITTIME 1050
-#define MAX31341_WAITTIME 2050
+#define MAX31341_WAITTIME 1050
+//#define MAX31341_WAITTIME 2050
 
 #define MAX31341_BCD2BIN(value) ((unsigned int)(((unsigned int)(value>>4))*10 + (value&0x0f)))
 #define MAX31341_BIN2BCD(value) (((value/10)<<4) + (value%10))
