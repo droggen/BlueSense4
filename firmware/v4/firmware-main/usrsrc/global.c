@@ -6,7 +6,7 @@
  */
 
 #include <stdio.h>
-
+#include "stm32l4xx.h"
 
 
 
@@ -22,3 +22,10 @@ unsigned char __mode_sleep=1;
 unsigned char system_devname[16];
 
 unsigned char system_mode;
+
+unsigned char is_in_interrupt()
+{
+	if (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk)
+		return 1;
+	return 0;
+}

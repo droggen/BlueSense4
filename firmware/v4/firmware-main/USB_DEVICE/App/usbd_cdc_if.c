@@ -26,8 +26,9 @@
 
 #include "usrmain.h"
 #include "serial_usb.h"
-#include "serial_itm.h"
+//#include "serial_itm.h"
 #include "circbuf.h"
+#include "atomicop.h"
 
 /* USER CODE END INCLUDE */
 
@@ -283,7 +284,7 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
 
-	itmprintf("usb_rcv_fs: %d\n",*Len);	// Dan
+	//itmprintf("usb_rcv_fs: %d\n",*Len);	// Dan
 
 	// put data in circular buffer
 	for(int i=0;i<*Len;i++)
@@ -363,26 +364,30 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 
 uint8_t CDC_TryTransmit_FS()
 {
-	// Version with circular buffer transfered to local buffer
-
 	uint8_t result;
-	USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-	if (hcdc->TxState != 0){
-		return USBD_BUSY;
-	}
-
-	// Not busy - move as much data from circualr buffer to local buffer
-	int nwrite = buffer_level(&SERIALPARAM_USB.txbuf);
-	if(APP_TX_DATA_SIZE < nwrite )
-		nwrite = APP_TX_DATA_SIZE;
-	for(int i=0;i<nwrite;i++)
+	// Version with circular buffer transfered to local buffer
+	// Must block as this is called from main thread and interrupts
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-		UserTxBufferFS[i] = buffer_get(&SERIALPARAM_USB.txbuf);
-	}
-	// Start the transfer
-	USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, nwrite);
-	result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+		USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
+		if (hcdc->TxState != 0){
+			return USBD_BUSY;
+		}
 
+		// Not busy - move as much data from circualr buffer to local buffer
+		int nwrite = buffer_level(&SERIALPARAM_USB.txbuf);
+		if(APP_TX_DATA_SIZE < nwrite )
+			nwrite = APP_TX_DATA_SIZE;
+		for(int i=0;i<nwrite;i++)
+		{
+			UserTxBufferFS[i] = buffer_get(&SERIALPARAM_USB.txbuf);
+		}
+
+		// Start the transfer
+		USBD_CDC_SetTxBuffer(&hUsbDeviceFS, UserTxBufferFS, nwrite);
+		result = USBD_CDC_TransmitPacket(&hUsbDeviceFS);
+
+	}
 	return result;
 }
 

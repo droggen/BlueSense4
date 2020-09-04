@@ -372,10 +372,6 @@ toto1:
 #endif
 
 
-	// Add a callback to flush USB buffer
-	//timer_register_callback(serial_usb_txcallback,1);
-	//timer_register_callback(serial_usb_txcallback,1);
-
 }
 
 

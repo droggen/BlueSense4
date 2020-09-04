@@ -109,6 +109,8 @@ void buffer_put(volatile CIRCULARBUFFER *io, unsigned char c)
 	
 	This must only be called if the buffer is not empty, as no check is done on the buffer capacity.
 	
+	_buffer_get does not disable interrupts.
+
 	Returns:
 		Character from the buffer
 ******************************************************************************/
@@ -120,6 +122,13 @@ unsigned char buffer_get(volatile CIRCULARBUFFER *io)
 	c = io->buffer[io->rdptr];
 	io->rdptr=(io->rdptr+1)&(io->mask);	
 	}
+	return c;
+}
+unsigned char _buffer_get(volatile CIRCULARBUFFER *io)
+{
+	unsigned char c;
+	c = io->buffer[io->rdptr];
+	io->rdptr=(io->rdptr+1)&(io->mask);
 	return c;
 }
 

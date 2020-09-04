@@ -104,5 +104,5 @@ extern unsigned char __mode_sleep;
 #define CONFIG_ADDR_AUDIO_SETTINGS 700
 
 unsigned long main_perfbench(unsigned long mintime);
-
+unsigned char is_in_interrupt();
 #endif /* GLOBAL_H_ */

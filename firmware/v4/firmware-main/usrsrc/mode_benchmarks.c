@@ -57,6 +57,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'U', CommandParserBenchUSB,help_benchusb},
 	{'B', CommandParserBenchBT,help_benchbt},
 	{'I', CommandParserBenchITM,help_benchitm},
+	{'W',CommandParserIntfWriteBench,"W,intf,ns,m Test write speed during ns seconds on intf (0=USB, 1=bluetooth) with method m (0=fputs, 1=putfbuf)"},
 
 	{'f',CommandParserFlush,"Flush"},
 	{'d',CommandParserDump,"Dump to itm"},
@@ -64,14 +65,17 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'u', CommandParserUSBDirect,"USB Direct write"},
 
 
-	{'W',CommandParserIntfWriteBench,"W,intf,ns,m Test write speed during ns seconds on intf (0=USB, 1=bluetooth) with method m (0=fputs, 1=putfbuf)"},
+
 	// change the vbuf?
 	{'b',CommandParserIntfBuf,"B,intf,buf,type sets the buffer size to buf for intf (0=USB, 1=bluetooth). buf=0 is no buffering, otherwise line buffered"},
 	{'S',CommandParserIntfStatus,"Show interface status until keypress"},
 	{'E',CommandParserIntfEvents,"Show UART event counters"},
 	{'C',CommandParserIntfEventsClear,"Clear UART event counters"},
 	{0,0,"---- Power ----"},
-	{'P',CommandParserBenchmarkPower,"Power consumption"}
+	{'P',CommandParserBenchmarkPower,"Power consumption"},
+	{0,0,"---- various benchmarks ----"},
+	{'X',CommandParserBenchmarkFlush,"Benchmark fflush"},
+	{'x',CommandParserBenchmarkLatency,"Benchmark write to display latency"},
 };
 unsigned char CommandParsersBenchmarksNum=sizeof(CommandParsersBenchmarks)/sizeof(COMMANDPARSER);
 
@@ -215,6 +219,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	char s[payloadsize+1];			// Payload
 
 	char *name[3] = {"fprintf","fwrite","fputbuf"};
+	unsigned result_dts[3];
 	unsigned result_dt[3];
 	unsigned result_nwritten[3];
 	unsigned result_bps[3];
@@ -253,6 +258,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	}
 	tint2=timer_ms_get_intclk();
 
+	result_dts[0] = (t_cur-t_last)*1000;
 	result_dt[0] = tint2-tint1;
 	result_nwritten[0] = nwritten;
 	result_bps[0] = nwritten*1000/(tint2-tint1);
@@ -276,6 +282,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	tint2=timer_ms_get_intclk();
 
 	result_dt[1] = tint2-tint1;
+	result_dts[1] = (t_cur-t_last)*1000;
 	result_nwritten[1] = nwritten;
 	result_bps[1] = nwritten*1000/(tint2-tint1);
 	result_nit[1] = nit;
@@ -298,15 +305,18 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	fprintf(file_pri,"tlast: %d tcur: %d\n",t_last,t_cur);
 
 	result_dt[2] = tint2-tint1;
+	result_dts[2] = (t_cur-t_last)*1000;
 	result_nwritten[2] = nwritten;
-	result_bps[2] = nwritten*1000/(tint2-tint1);
+	//result_bps[2] = nwritten*1000/(tint2-tint1);
+	result_bps[2] = nwritten*1000/result_dts[2];		// Use second timer, as millisecond may loose interrupts under heavy load
 	result_nit[2] = nit;
 	HAL_Delay(500);
 
 	for(int i=0;i<3;i++)
 	{
 		fprintf(finfo,"Benchmark of %s\n",name[i]);
-		fprintf(finfo,"\tTime: %lu ms.\n",result_dt[i]);
+		fprintf(finfo,"\tTime: %lu ms. (with ms int)\n",result_dt[i]);
+		fprintf(finfo,"\tTime: %lu ms. (with sec. int)\n",result_dts[i]);
 		fprintf(finfo,"\tIterations: %u.\n",result_nit[i]);
 		fprintf(finfo,"\tBytes written: %u.\n",result_nwritten[i]);
 		fprintf(finfo,"\tBandwidth: %lu bps.\n",result_bps[i]);
@@ -414,18 +424,24 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	}
 
 	fprintf(file_pri,"Benchmark write on interface %s for %d seconds with method %s\n",intf?"BT":"USB",ns,method?"fputbuf":"fputs");
-	// Enable blocking write
-	serial_setblockingwrite(file_pri,1);
 
-	// Convert seconds in milliseconds
-	//ns*=1000;
+	// Enable blocking write
+	fprintf(file_pri,"Enabling blocking writes\n");
+	//serial_setblockingwrite(file_pri,1);
 
 	// Select interface
 	FILE *fi;
+	unsigned txbufsize;		// Hold the size of the TX buffer of the interface
 	if(intf==0)
+	{
 		fi = file_usb;
+		txbufsize = USB_BUFFERSIZE;
+	}
 	else
+	{
 		fi = file_bt;
+		txbufsize = SERIAL_UART_TX_BUFFERSIZE;
+	}
 
 	for(int i=0;i<n;i++)
 	{
@@ -434,12 +450,10 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	//buf[n-1]='\n';
 	buf[n]=0;
 
-	// Benchmark with fwrite
 
 	unsigned wr=0;
 
-
-	unsigned t1,t2,ts1,ts2;
+	unsigned t1,t2,ts1,ts2,dt;
 	unsigned it=0;
 	switch(method)
 	{
@@ -449,11 +463,9 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 			t1 = timer_ms_get();
 			do
 			{
-				//wr += fwrite(buf,n,1,fb);
 				if(fputs(buf,fi)>=0)
 					wr++;
 				it++;
-//				HAL_Delay(5);
 			}
 			while( (ts2 = timer_s_get())-ts1 < ns);
 			t2 = timer_ms_get();
@@ -466,7 +478,6 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 			t1 = timer_ms_get();
 			do
 			{
-				//wr += fwrite(buf,n,1,fb);
 				if(fputbuf(fi,buf,n)==0)
 					wr++;
 				it++;
@@ -477,15 +488,23 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 		}
 
 	}
+	dt = (ts2-ts1)*1000;
 	// Wait for the buffers to empty, as fprintf is non-blocking
 	HAL_Delay(500);
 
 	// Disable blocking write
+	fprintf(file_pri,"Disabling blocking writes\n");
 	serial_setblockingwrite(file_pri,0);
 
+
 	fprintf(file_pri,"\n");
-	fprintf(file_pri,"Sent %u buffers of %d (tot: %d). Successfully wrote %d buffers. Time: %d\n",it,n,it*n,wr,t2-t1);
-	fprintf(file_pri,"Speed: %u KB/s\n",wr*n*1000/1024/(t2-t1));
+	fprintf(file_pri,"Sent %u buffers of %d (tot: %d bytes). Successfully wrote %d buffers (tot %d bytes). Time: %d ms (with sec. int) %d (with ms int)\n",it,n,it*n,wr,wr*n,dt,t2-t1);
+	fprintf(file_pri,"Speed: %u KB/s\n",wr*n*1000/1024/dt);
+	// Account for the TX buffer size, which likely isn't empty
+	fprintf(file_pri,"Accounting for TX buffer size (%d) wrote: %d\n",txbufsize,wr*n-txbufsize);
+	fprintf(file_pri,"Speed: %u KB/s\n",(wr*n-txbufsize)*1000/1024/dt);
+
+
 
 	return 0;
 }
@@ -760,5 +779,55 @@ unsigned char CommandParserUSBDirect(char *buffer,unsigned char size)
 	return 0;
 }
 
+unsigned char CommandParserBenchmarkFlush(char *buffer,unsigned char size)
+{
+	unsigned n=10000;
+	unsigned long t1,t2;
+	char buf[32];
+	memset(buf,'@',32);
 
 
+	fprintf(file_pri,"Benchmarking fflush(file_pri) without data in buffer\n");
+
+
+	t1=timer_ms_get();
+	for(unsigned i=0;i<n;i++)
+		fflush(file_pri);
+	t2=timer_ms_get();
+	fprintf(file_pri,"Time: %ld ms for %u iterations\n",t2-t1,n);
+	fprintf(file_pri,"Time per call: %ld us\n",(t2-t1)*1000L/n);
+
+	fprintf(file_pri,"Benchmarking fflush(file_pri) with fwrite of 32-byte (silent writes)\n");
+	_serial_usb_enable_write(0);
+
+	t1=timer_ms_get();
+	for(unsigned i=0;i<n;i++)
+	{
+		fwrite(buf,32,1,file_pri);
+		fflush(file_pri);
+	}
+	t2=timer_ms_get();
+
+	_serial_usb_enable_write(1);
+	fprintf(file_pri,"Time: %ld ms for %u iterations\n",t2-t1,n);
+	fprintf(file_pri,"Time per call: %ld us\n",(t2-t1)*1000L/n);
+
+
+
+	return 0;
+}
+
+
+unsigned char CommandParserBenchmarkLatency(char *buffer,unsigned char size)
+{
+	fprintf(file_pri,"Testing writing latency when writing text not immediately flushed\n");
+	for(int i=0;i<5;i++)
+	{
+		fprintf(file_pri,"Writing string\n");
+		//HAL_Delay(1000);
+		fprintf(file_pri,"<test string %d>",i);
+		HAL_Delay(2000);
+		fprintf(file_pri,"Write done\n\n");
+	}
+
+}

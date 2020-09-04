@@ -41,6 +41,7 @@ typedef struct
 void buffer_init(CIRCULARBUFFER *io, unsigned char *buffer, unsigned int sz);
 void buffer_put(volatile CIRCULARBUFFER *io, unsigned char c);
 unsigned char buffer_get(volatile CIRCULARBUFFER *io);
+unsigned char _buffer_get(volatile CIRCULARBUFFER *io);		// Does not disable interrupts
 unsigned char buffer_unget(volatile CIRCULARBUFFER *io,unsigned char c);
 unsigned char buffer_isempty(volatile CIRCULARBUFFER *io);
 void buffer_clear(volatile CIRCULARBUFFER *io);

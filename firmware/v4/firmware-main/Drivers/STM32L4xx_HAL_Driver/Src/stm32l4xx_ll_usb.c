@@ -180,7 +180,7 @@ HAL_StatusTypeDef USB_SetTurnaroundTime(USB_OTG_GlobalTypeDef *USBx,
       /* hclk Clock Range between 24-27.7 MHz */
       UsbTrd = 0x8U;
     }
-    else if ((hclk >= 27700000U) && (hclk < 32000000U))
+    else if ((hclk >= 27700000U) && (hclk <= 32000000U)) // Dan: fix bug in ST driver
     {
       /* hclk Clock Range between 27.7-32 MHz */
       UsbTrd = 0x7U;

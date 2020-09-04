@@ -14,6 +14,45 @@
 #include "system.h"
 #include "wait.h"
 #include "global.h"
+
+
+/******************************************************************************
+	file: serial_usb
+*******************************************************************************
+
+
+	*Implementation notes*
+
+
+	There are two possibilities to send data from the circular bfufer to usb:
+	1 Call at regular interval the CDC_TryTransmit_FS
+	2 Call CDC_TryTransmit_FS whenever a cookie_write or putbuf is called; and also on a Transfer complete (to handle additional data put in circular buffer in the meantime).
+	By default this uses implementations 2: part (2) allows higher throughput.
+
+	The transmit implementation is non-blocking by default. This means that if the TX circular buffer is full then data is lost.
+	This is required so that text printed but not read from the host (e.g. when USB disconnected and buffering when disconnected) does not block
+	the operation of the node.
+	This requires a large enough transmit buffer (USB_BUFFERSIZE) to hold all the data which may be rapidly printed (e.g. the help screen).
+
+
+	A blocking write option is implemented in cookie_write for benchmarking purposes. If stdio functions are used in interrupts and the writes are blocking
+	then the firmware hangs. Avoid blocking write unless used for benchmarking.
+
+
+
+	Bug in the ST LL driver: modify stm32l4xx_ll_usb.c with the line
+	else if ((hclk >= 27700000U) && (hclk <= 32000000U)) // Dan: fix bug in ST driver
+	to avoid USB hanging when the HCLK is exactly 32MHz. This is an occasional hanging
+	with high transfer rate. See:
+	https://community.st.com/s/question/0D50X00009XkaCXSAZ/otg-documentation-cube-otghsgusbcfgtrdt-values
+
+
+
+
+
+
+******************************************************************************/
+
 /*
 Modifications required to the ST USB CDC stack:
 - Modify USBD_CDC_DataIn in usbd_cdc.c to call usb_cdc_txready_callback
@@ -30,7 +69,10 @@ volatile unsigned char USB_TX_DataBuffer[USB_BUFFERSIZE];
 
 uint8_t CDC_TryTransmit_FS();
 
+unsigned char _serial_usb_write_enabled=1;			// Debug parameter to disable data write in cookie_write
+
 extern USBD_HandleTypeDef hUsbDeviceFS;
+#if 0
 void trytxbletooth()
 {
 	// Not busy - move as much data from circualr buffer to local buffer
@@ -43,37 +85,15 @@ void trytxbletooth()
 	}
 
 }
-unsigned char serial_usb_txcallback(unsigned char p)
+#endif
+
+unsigned char _serial_usb_trigger_background_tx(unsigned char p)
 {
 	(void)p;
-	static unsigned priorbusy=0;
 
-	//itmprintf("c\n");
-	//fflush(file_usb);
-
-	int busy=0;
-	USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-	if (hcdc->TxState != 0){
-		busy=1;
-		if(priorbusy==1 && busy==1)
-			itmprintf("busy\n");
-		priorbusy=busy;
-		return;
-	}
-	priorbusy=0;
-
-	/*if(system_isbtconnected())
-	{
-		char s[256];
-		sprintf(s,"cb: lvl: %d bsy: %d\n",buffer_level(&SERIALPARAM_USB.txbuf),busy);
-		fputbuf(file_bt,s,strlen(s));
-		//fprintf(file_bt,"cb: lvl: %d bsy: %d\n",buffer_level(&SERIALPARAM_USB.txbuf),busy);
-	}*/
-
+	fflush(file_usb);
 	if(buffer_level(&SERIALPARAM_USB.txbuf))
-
 		CDC_TryTransmit_FS();
-		//trytxbletooth();
 
 	return 0;
 }
@@ -92,10 +112,10 @@ FILE *serial_open_usb()
 	iof.close = 0;
 	iof.seek = 0;
 	FILE *f = fopencookie((void*)&SERIALPARAM_USB,"w+",iof);
+	// Line buffering speeds up writes by calling cookie_write with up to a buffer-length large payload.
+	// However, it
 	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
-	//setvbuf (f, stdiobuf, _IOLBF, 64);	// Line buffer buffering
-	//setvbuf (f, 0, _IOLBF, 4);	// Line buffer buffering
 
 	//serial_associate(f,&SERIALPARAM_USB);			// Use big hack with f->_cookie below
 
@@ -120,9 +140,9 @@ FILE *serial_open_usb()
 
 	fprintf(f,"Find from file %p, serialparam: %p\n",f,serial_findserialparamfromfile(f));*/
 
-	// Register a callback
-
-	//timer_register_callback(serial_usb_txcallback,0);
+	// Register USB write callback at low rate to flush stdio and write data
+	timer_register_callback(_serial_usb_trigger_background_tx,199);		// 1000Hz/200 = 5Hz (200ms latency)
+	//timer_register_callback(serial_usb_txcallback,3999);		// 1000Hz/2000 = 0.5Hz
 
 
 	return f;
@@ -133,15 +153,12 @@ void serial_usb_initbuffers()
 	SERIALPARAM_USB.blocking = 0;
 	SERIALPARAM_USB.blockingwrite = 0;
 	SERIALPARAM_USB.bufferwhendisconnected = 0;
-	//SERIALPARAM_USB.bufferwhendisconnected = 1;
 	SERIALPARAM_USB.putbuf = serial_usb_putbuf;
 	SERIALPARAM_USB.fischar = serial_usb_fischar;
 
 	// Initialise the circular buffers with the data buffers
 	buffer_init(&SERIALPARAM_USB.rxbuf,USB_RX_DataBuffer,USB_BUFFERSIZE);
 	buffer_init(&SERIALPARAM_USB.txbuf,USB_TX_DataBuffer,USB_BUFFERSIZE);
-
-	memset(USB_TX_DataBuffer,'@',USB_BUFFERSIZE);
 }
 
 
@@ -172,70 +189,45 @@ ssize_t serial_usb_cookie_read(void *__cookie, char *__buf, size_t __n)
 	return nread;
 
 
-	__buf[0]='A';
-	return 1;
 }
 
 extern uint8_t UserTxBufferFS[];
 ssize_t serial_usb_cookie_write(void *__cookie, const char *__buf, size_t __n)
 {
-	// New version!
-	//HAL_Delay(2);
-	// Check if USB ongoing
-	/*USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-	if (hcdc->TxState != 0){
-		return 0;	// We loose all the data - don't care
-	}*/
-	/*if(__n>2048)
-		__n=2048;
-	memcpy(UserTxBufferFS,__buf,__n);
-	CDC_Transmit_FS(UserTxBufferFS,__n);
-	return __n;*/
-
-
-
-	//printf("usbwr\n");
 	size_t i;
 
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+
+	// Debug: "silent writes"
+	if(!_serial_usb_write_enabled)
+		return __n;
+
+
+
+	/*ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
 		// Test if enough space
 		unsigned f = buffer_freespace(&SERIALPARAM_USB.txbuf);
 		//if(__n>f)
 			//itmprintf("cookiewrite: not en spc %d %d\n",f,__n);
-	}
+	}*/
 
 	// Convert cookie to SERIALPARAM
 	SERIALPARAM *sp = (SERIALPARAM*)__cookie;
 
 	// Check if must block until space available
-	/*if(sp->blockingwrite)
+	if(sp->blockingwrite)
 	{
-		// Block only if not in interrupt, otherwise buffers will never empty
+		// Block only if not in interrupt (e.g. if fprintf called from interrupt), otherwise buffers will never empty
 		if(!is_in_interrupt())
 		{
 			// Block only if the buffer is large enough to have a chance to hold the data
 			if(USB_BUFFERSIZE>__n)
 			{
 				while(buffer_freespace(&SERIALPARAM_USB.txbuf)<__n)
-					HAL_Delay(1);
+					__NOP();
 			}
 		}
-	}*/
-
-
-	//itmprintf("usbwr n: %d. cookie: %p buffer?: %d usbcon: %d\n",__n,__cookie,sp->bufferwhendisconnected,system_isusbconnected());
-	/*if(system_isbtconnected())
-	{
-		char s[256];
-		int busy=0;
-		USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-		if (hcdc->TxState != 0){
-			busy=1;
-		}
-		sprintf(s,"cookwr: %d lvl: %d bsy: %d\n",__n,buffer_level(&SERIALPARAM_USB.txbuf),busy);
-		fputbuf(file_bt,s,strlen(s));
-	}*/
+	}
 
 	// If no buffering when disconnected return
 	if( (sp->bufferwhendisconnected==0) && (system_isusbconnected()==0) )
@@ -262,22 +254,23 @@ ssize_t serial_usb_cookie_write(void *__cookie, const char *__buf, size_t __n)
 	// Try to send
 	CDC_TryTransmit_FS();
 
-	//return i; // return number put in write buffer
+	return i; 		// Return true number put in the usb circular buffer
 
-
-	/*uint32_t rv = CDC_Transmit_FS(__buf,__n);
-	if(rv==USBD_OK)
-	{
-		//printf("serial_usb_write ok %d\n",__n);
-		return __n;
-	}*/
-
-	//printf("serial_usb_write fail %d\n",__n);
-	// Otherwise: USBD_FAIL or USBD_BUSY
-	//return i;
-	return __n;
+	//return __n;	//
 }
+/******************************************************************************
+	function: _serial_usb_enable_write
+*******************************************************************************
+	Disable cookie_write (fputs, fprintf, etc) for debugging/benchmarking purposes.
 
+
+	Return value:
+		-
+******************************************************************************/
+void _serial_usb_enable_write(unsigned char en)
+{
+	_serial_usb_write_enabled=en;
+}
 /******************************************************************************
 	function: serial_usb_putbuf
 *******************************************************************************
@@ -306,8 +299,8 @@ unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 	}
 
 	// Send only sporadically
-	/*if(isnewline || buffer_level(&SERIALPARAM_USB.txbuf)>=64)
-		CDC_TryTransmit_FS();*/
+	if(isnewline || buffer_level(&SERIALPARAM_USB.txbuf)>=16)
+		CDC_TryTransmit_FS();
 
 	// Send always
 	//CDC_TryTransmit_FS();

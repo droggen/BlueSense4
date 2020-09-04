@@ -1360,11 +1360,11 @@ void serial_uart_printevents(FILE *f)
 	fprintf(f,"\tEvents during interrupt: %lu\n",Serial1EvtWithinInt);
 
 	// Print if
-	fprintf(f,"CR1: %08X\n",USART2->CR1);
-	fprintf(f,"CR1: idle %d\n",(USART2->CR1&0x10)?1:0);
-	fprintf(f,"CR1: rxne %d\n",(USART2->CR1&0x20)?1:0);
-	fprintf(f,"CR1: tc %d\n",(USART2->CR1&0x40)?1:0);
-	fprintf(f,"CR1: txe %d\n",(USART2->CR1&0x80)?1:0);
+	fprintf(f,"\tCR1: %08X\n",USART2->CR1);
+	fprintf(f,"\t\tidle: %d\n",(USART2->CR1&0x10)?1:0);
+	fprintf(f,"\t\trxne: %d\n",(USART2->CR1&0x20)?1:0);
+	fprintf(f,"\t\ttc: %d\n",(USART2->CR1&0x40)?1:0);
+	fprintf(f,"\t\ttxe: %d\n",(USART2->CR1&0x80)?1:0);
 }
 void serial_uart_clearevents()
 {
