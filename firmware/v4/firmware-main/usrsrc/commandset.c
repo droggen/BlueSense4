@@ -95,7 +95,6 @@ const char help_fat[]="fat test";
 const char help_sleep[] = "p[,<0|1>] Query sleep state or enable (1) or disable (0) sleep while waiting user input";
 const char help_cpureg[] = "Print CPU registers";
 const char help_audio[] = "Audio functions";
-const char help_benchmark_cpu[] = "CPU benchmarks";
 
 const char help_1[]  ="Fcn 1";
 
@@ -521,7 +520,7 @@ unsigned char CommandParserIO(char *buffer,unsigned char size)
 }
 unsigned char CommandParserSwap(char *buffer,unsigned char size)
 {
-	//interface_swap();
+	interface_swap();
 		
 	return 0;
 }
@@ -958,44 +957,6 @@ unsigned char CommandParserInterrupts(char *buffer,unsigned char size)
 
 
 
-unsigned char CommandParserBenchmark(char *buffer,unsigned char size)
-{
-	(void) buffer; (void) size;
-
-
-
-
-
-	/*
-	fprintf(file_pri,"Running until keypress\n");
-	unsigned t1 = timer_ms_get();
-	unsigned c=0;
-	while(1)
-	{
-		c++;
-		if(fgetc(file_pri)!=-1)
-			break;
-	}
-	unsigned t2 = timer_ms_get();
-	fprintf(file_pri,"Count %u in %u ms (cps=%u)\n",c,t2-t1,c*1000/(t2-t1));*/
-
-	static signed int pwr;
-	static unsigned long timems;
-	fprintf(file_pri,"Data of previous measurement: time %ld ms Power: %d mW\n",timems,pwr);
-	power_measure_start();
-	for(int i=0;i<60;i++)
-	{
-		fprintf(file_pri,"Power test: %d\n",i);
-		HAL_Delay(1000);
-	}
-
-	pwr = power_measure_stop(&timems);
-	fprintf(file_pri,"Time elapsed: %ld Power: %d mW\n",timems,pwr);
-
-
-
-	return 0;
-}
 
 unsigned char CommandParserSleep(char *buffer,unsigned char size)
 {
@@ -1062,10 +1023,10 @@ unsigned char CommandParserAudio(char *buffer,unsigned char size)
 	CommandChangeMode(APP_MODE_AUDIO);
 	return 0;
 }
-unsigned char CommandParserBenchmarkCPU(char *buffer,unsigned char size)
+unsigned char CommandParserBenchmark(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
-	CommandChangeMode(APP_MODE_BENCHMARKCPU);
+	CommandChangeMode(APP_MODE_BENCHMARK);
 	return 0;
 }
 unsigned char CommandParserModeDACTest(char *buffer,unsigned char size)

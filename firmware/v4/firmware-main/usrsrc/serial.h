@@ -44,9 +44,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 typedef struct _SERIALPARAM
 {
-	unsigned char blocking;
+	unsigned char blocking,blockingwrite;
 	unsigned char bufferwhendisconnected;
 	unsigned char dma1_or_int0;
+	unsigned char dma1_or_int0_tx;
 	CIRCULARBUFFER txbuf;
 	CIRCULARBUFFER rxbuf;
 
@@ -96,6 +97,7 @@ char *fgets_timeout_100ms( char *str, int num, FILE *stream);
 unsigned char fputbuf(FILE *stream,char *data,unsigned short n);
 unsigned char fischar(FILE *stream);
 void fbufferwhendisconnected(FILE *stream,unsigned char bufferwhendisconnected);
+void serial_setblockingwrite(FILE *file,unsigned char blocking);
 /*unsigned short fgettxbuflevel(FILE *stream);
 unsigned short fgetrxbuflevel(FILE *stream);
 unsigned short fgettxbuffree(FILE *stream);

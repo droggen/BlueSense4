@@ -241,6 +241,8 @@ void _timer_tick_hz(void)
 	// Increment the 1hz update correction counter.
 	_timer_time_1hzupdatectr++;
 
+	return;	// Debug: never do correction
+
 	// Updating the internal time every 5s leads to <estimate ppm error>
 	const unsigned updateperiod = 5;
 	if(_timer_time_1hzupdatectr>=updateperiod)
@@ -1223,3 +1225,8 @@ void timer_get_speedtest(void)
 }
 */
 
+void timer_us_wait(unsigned long us)
+{
+	unsigned long t1 = timer_us_get();
+	while((timer_us_get()-t1)<us);
+}

@@ -10,10 +10,14 @@
 #include "circbuf.h"
 #include "serial.h"
 
+//#define USB_BUFFERSIZE 1024
 #define USB_BUFFERSIZE 8192
+//#define USB_BUFFERSIZE 256
 
 extern SERIALPARAM SERIALPARAM_USB;
 
+extern volatile unsigned char USB_RX_DataBuffer[];
+extern volatile unsigned char USB_TX_DataBuffer[];
 
 
 void serial_usb_initbuffers();
@@ -32,4 +36,5 @@ int usb_fgetchar_nonblock(FILE *stream);*/
 void serial_usb_clearbuffers(void);
 unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n);
 unsigned char serial_usb_fischar(SERIALPARAM *sp);
+
 

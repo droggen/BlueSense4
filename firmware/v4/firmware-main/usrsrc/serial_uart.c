@@ -20,6 +20,47 @@
 #include "serial.h"
 #include "system.h"
 #include "global.h"
+#include "wait.h"
+
+/******************************************************************************
+	file: serial_uart
+*******************************************************************************
+	Abstraction to use stdio functions on a uart.
+
+
+
+	*Implementation details*
+
+	RX without DMA: Interrupt driven. RX HW flow control enabled (RTS). Data received on RXNE interrupt
+	RX with DMA: RX flow control (RTS) done by software. DMA HT and TC interrupt and serial IDLE interrupt call serial_uart_dma_rx.
+	serial_uart_dma_rx moves the data from the DMA buffer to the circular buffer. If the circular buffer is too low, it deasserts RTS.
+	Whenever cookie_read reads and the circular buffer is high enough again, reassert RTS.
+
+	TX DMA:
+	- cookie_write or putbut: try_dma_tx
+	- cts deasserted: pause transfer by LL_USART_DisableDMAReq_TX
+	- end dma: try_dma_tx
+	try_dma_tx:
+	- ongoing transfer (dma active): do nothing
+	- no data in tx buf: do nothing
+	- cts not asserted: do nothing
+
+	TOCHECK: DMA moves data after TXE events; UART transmits a frame if CTS asserted. Therefore if CTS is not asserted,
+	further DMA transfers are automatically paused.
+
+
+	* Main functions*
+
+
+
+
+
+
+
+TODO:
+
+******************************************************************************/
+
 
 #warning significant overrun errors when receiving data at 460K.
 
@@ -31,6 +72,7 @@ unsigned char _serial_uart_rx_buffer[SERIALUARTNUMBER][SERIAL_UART_RX_BUFFERSIZE
 unsigned char _serial_uart_tx_buffer[SERIALUARTNUMBER][SERIAL_UART_TX_BUFFERSIZE];
 // DMA buffers
 volatile unsigned char _serial_uart_rx_dma_buffer[SERIAL_UART_DMA_RX_BUFFERSIZE];
+volatile unsigned char _serial_uart_tx_dma_buffer[DMATXLEN];
 
 
 volatile unsigned long Serial1DOR=0;				// Data overrun
@@ -43,6 +85,7 @@ volatile unsigned long Serial1CTS=0;					//
 volatile unsigned long Serial1Idle=0;					//
 volatile unsigned long Serial1DMARXOverrun=0;			//
 volatile unsigned long Serial1DMARXInt=0;
+volatile unsigned long Serial1DMATXInt=0;
 volatile unsigned long Serial1Int=0;					// Total interrupt
 volatile unsigned long Serial1EvtWithinInt=0;		// Counts if there is a new int-triggering flag set during the interrupt process, could be used to speed up
 
@@ -85,7 +128,8 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 {
 	FILE *f=0;
 
-	int p = serial_uart_init(periph,1);			// 1 for DMA; 0 for interrupt
+	int p = serial_uart_init(periph,0,0);			// 1 for DMA; 0 for interrupt
+	//int p = serial_uart_init(periph,1,1);			// 1 for DMA; 0 for interrupt
 
 	//itmprintf("aft serial_uart_init\n");
 
@@ -114,10 +158,10 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	//itmprintf("fopencookie: %p\n",f);
 
 	// Buffering can lead to issues when entering command modes ($$$)
-	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
+	setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	//setvbuf (f, 0, _IOLBF, 1024);	// Line buffer buffering
 	//setvbuf (f, 0, _IOLBF, 16);	// Line buffer buffering
-	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+	//setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
@@ -134,7 +178,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 // Init uart
 // -1: error
 // >=0 ok
-int serial_uart_init(USART_TypeDef *h,int dma1_or_int0)
+int serial_uart_init(USART_TypeDef *h,int dma1_or_int0,int dma1_or_int0_tx)
 {
 	//fprintf(file_pri,"serial_uart_init\n");
 	// Static allocate a data structure
@@ -150,13 +194,15 @@ int serial_uart_init(USART_TypeDef *h,int dma1_or_int0)
 	// Initialise the high-level data structure
 	_serial_uart_param[a].device = h;
 	_serial_uart_param[a].blocking = 0;
+	_serial_uart_param[a].blockingwrite = 0;
 	_serial_uart_param[a].bufferwhendisconnected = 0;
 	_serial_uart_param[a].putbuf = &serial_uart_putbuf;
 	_serial_uart_param[a].fischar = &serial_uart_fischar;
 	_serial_uart_param[a].dma1_or_int0 = dma1_or_int0;
+	_serial_uart_param[a].dma1_or_int0_tx = dma1_or_int0_tx;
 
 	// Initialise the hardware
-	serial_uart_init_ll(dma1_or_int0);
+	serial_uart_init_ll(dma1_or_int0,dma1_or_int0_tx);
 	//itmprintf("before ie\n");
 	//fprintf(file_pri,"about to enable interrupt\n");
 	//serial_usart_interruptenable(h);
@@ -405,7 +451,8 @@ void serial_usart_irq(USART_TypeDef *h)
 	unsigned sr = h->ISR;			// Get SR once
 
 	//fprintf(file_pri,"IRQ %08X\n",sr);
-	//fprintf(file_pri,"I\n");
+	//fprintf(file_usb,"IRQ %08X\n",sr);
+	//fprintf(file_usb,"I\n");
 
 	// Find the data structure corresponding to the UART
 	int p = serial_uart_findparam(h);
@@ -428,12 +475,13 @@ void serial_usart_irq(USART_TypeDef *h)
 
 	// Find interrupt type
 
-	// IDLE interrupt occur when no data is received - trigger a check of the RX DMA buffer
+	// IDLE interrupt occur when no data is received. In DMA mode trigger a check of the RX DMA buffer
 	if(sr & USART_ISR_IDLE)
 	{
 		Serial1Idle++;
 		h->ICR|=USART_ICR_IDLECF;
-		serial_uart_dma_rx(p);
+		if(_serial_uart_param[p].dma1_or_int0==1)
+			serial_uart_dma_rx(p);
 	}
 
 	// CTS interrupt
@@ -441,6 +489,7 @@ void serial_usart_irq(USART_TypeDef *h)
 	{
 		Serial1CTS++;
 		h->ICR|=USART_ICR_CTSCF;
+		itmprintf("CTS\n");
 	}
 
 	// RX interrupt - used only in non-DMA mode
@@ -553,7 +602,7 @@ void serial_usart_dma_rx_irq()
 {
 	Serial1DMARXInt++;		// Increment the DMA RX interrupt counter
 
-	//fprintf(file_pri,"D\n");
+	//fprintf(file_usb,"D\n");
 	/*fprintf(file_pri,"DMA IRQ:\n");
 	for(int i=0;i<10;i++)
 	{
@@ -635,6 +684,107 @@ void serial_uart_dma_rx(unsigned char serialid)
 
 
 	}
+}
+/******************************************************************************
+	function: serial_usart_dma_tx_irq
+*******************************************************************************
+	IRQ handler for UART DMA TX.
+
+	Note: called from DMA1_Channel7_IRQHandler in Src/stm32l4xx_it.c
+
+	Only action: deactivate the channel at the end of the transfer to indicate
+	a transfer is completed.
+
+	Assume only the TC interrupt is enabled
+
+
+
+	Return value:	-
+******************************************************************************/
+void serial_usart_dma_tx_irq()
+{
+	Serial1DMATXInt++;
+
+	//fprintf(file_usb,"d\n");
+	//unsigned datleft=(unsigned)LL_DMA_GetDataLength(DMA1, LL_DMA_CHANNEL_7);
+	//unsigned long t = timer_us_get();
+
+	//fprintf(file_pri,"DMA TX IRQ: %d at %ld\n",datleft,t);
+	// Check half-transfer complete interrupt. HT is not enabled -> deactivate this.
+	/*if (LL_DMA_IsEnabledIT_HT(DMA1, LL_DMA_CHANNEL_7) && LL_DMA_IsActiveFlag_HT7(DMA1))
+	{
+		//fprintf(file_pri,"HT\n");
+		LL_DMA_ClearFlag_HT7(DMA1);             	// Clear half-transfer complete flag
+	}*/
+	// Check transmit error. TE is not enabled -> deactivate this.
+	/*if (LL_DMA_IsEnabledIT_TE(DMA1, LL_DMA_CHANNEL_7) && LL_DMA_IsActiveFlag_TE7(DMA1))
+	{
+		//fprintf(file_pri,"TE\n");
+		LL_DMA_ClearFlag_TE7(DMA1);
+	}*/
+
+	// Check transfer-complete interrupt
+	if (LL_DMA_IsEnabledIT_TC(DMA1, LL_DMA_CHANNEL_7) && LL_DMA_IsActiveFlag_TC7(DMA1))
+	{
+		//fprintf(file_usb,"TC. \n");
+		LL_DMA_ClearFlag_TC7(DMA1);
+
+		// Deactivate channel
+		LL_DMA_DisableChannel(DMA1,LL_DMA_CHANNEL_7);
+
+		// Send new data if any
+		serial_uart_dma_tx(0);
+	}
+
+}
+
+/******************************************************************************
+	function: serial_uart_dma_tx
+*******************************************************************************
+	Attempts to start a DMA TX transfer.
+
+	This function is called by:
+	- the TC DMA interrupt
+	- cookie_write
+	- fputbuf
+	- any other function writing to the tx circular buffer
+
+	This function:
+	- If any data to transfer: if not, do nothing
+	- Checks if ongoing DMA transfer: if yes, do nothing
+	- If connected or if not connected whether transmit while not connected is enabled
+
+
+
+	Return value:	-
+******************************************************************************/
+void serial_uart_dma_tx(unsigned char serialid)
+{
+	//fprintf(file_usb,"serial_uart_dma_tx\n");
+
+	// Check if any data to transfer in the tx circular buffer
+	unsigned buflevel = buffer_level(&_serial_uart_param[serialid].txbuf);
+	if(buflevel==0)
+		return;
+	// Check if ongoing DMA transfer. If yes, return.
+	if(LL_DMA_IsEnabledChannel(DMA1,LL_DMA_CHANNEL_7))
+		return;
+	// Channel is free and data is available - fill in data
+	unsigned n=buflevel;
+	if(DMATXLEN<n)
+		n=DMATXLEN;
+	for(unsigned i=0;i<n;i++)
+		_serial_uart_tx_dma_buffer[i] = buffer_get(&_serial_uart_param[serialid].txbuf);
+
+	// Configure DMA
+	LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, n);
+	LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_7, (uint32_t)_serial_uart_tx_dma_buffer);
+	// Clear all flags
+	LL_DMA_ClearFlag_TC7(DMA1);
+	LL_DMA_ClearFlag_HT7(DMA1);
+	LL_DMA_ClearFlag_TE7(DMA1);
+	// Start transfer
+	LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_7);
 }
 
 
@@ -739,11 +889,12 @@ void serial_uart_dma_rx(unsigned char serialid)
 	Return value:
 		number of bytes written (0 if none)
 ******************************************************************************/
-//typedef ssize_t cookie_write_function_t(void *__cookie, const char *__buf, size_t __n);
 ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __nbytes)
 {
 	__ssize_t nw=0;
 	unsigned c=0;
+
+	//fprintf(file_usb,"cookiewrite: %d\n",__nbytes);
 
 	// Convert cookie to SERIALPARAM
 	SERIALPARAM *sp = (SERIALPARAM*)__cookie;
@@ -785,8 +936,11 @@ ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __
 		buffer_put(&(sp->txbuf),__buf[i]);
 		{
 			nw++;
-			// Immediately trigger an interrupt if TXE empty
-			((USART_TypeDef*)sp->device)->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+			if(sp->dma1_or_int0_tx==0)
+			{
+				// Interrupt mode: immediately trigger an interrupt if TXE empty
+				((USART_TypeDef*)sp->device)->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+			}
 		}
 		/*
 		// Non-blocking write
@@ -803,6 +957,11 @@ ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __
 	// Trigger an interrupt when UDR is empty and if wrote
 	//if(nw)
 		//((USART_TypeDef*)sp->device)->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+	if(sp->dma1_or_int0_tx==1)
+	{
+		// DMA mode: only start DMA once the data has been copied to the circular buffer.
+		serial_uart_dma_tx(0);		// Hacked to first usart
+	}
 	return nw;
 }
 /******************************************************************************
@@ -872,6 +1031,12 @@ unsigned char serial_uart_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
+		// If no buffering when disconnected return
+		if( (sp->bufferwhendisconnected==0) && (system_isbtconnected()==0) )
+		{
+			return 0;		// Simulate we wrote data successfully; but discard it.
+		}
+
 		if(!system_isbtconnected())
 			return 1;
 		if(buffer_freespace(&sp->txbuf)<n)
@@ -879,9 +1044,17 @@ unsigned char serial_uart_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 		for(unsigned short i=0;i<n;i++)
 			buffer_put(&sp->txbuf,data[i]);
 	}
-	// Trigger an interrupt when UDR is empty and if wrote
-	if(n)
-		((USART_TypeDef*)sp->device)->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+	if(sp->dma1_or_int0_tx==0)
+	{
+		// Interrupt mode: trigger an interrupt when UDR is empty and if wrote data
+		if(n)
+			((USART_TypeDef*)sp->device)->CR1 |= USART_CR1_TXEIE;		// TX register empty interrupt enable
+	}
+	else
+	{
+		// DMA mode: try to send data
+		serial_uart_dma_tx(0);			// Hacked to first usart
+	}
 
 	return 0;
 }
@@ -938,7 +1111,7 @@ int serial_uart_txbufferfree(int p)
 
 
 ******************************************************************************/
-void serial_uart_init_ll(int dma1_or_int0)
+void serial_uart_init_ll(int dma1_or_int0,int dma1_or_int0_tx)
 {
 	LL_USART_InitTypeDef USART_InitStruct = {0};
 	LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -1007,6 +1180,27 @@ void serial_uart_init_ll(int dma1_or_int0)
 		LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_6);
 		LL_DMA_EnableIT_TC(DMA1, LL_DMA_CHANNEL_6);
 	}
+	// USART2 DMA TX init
+	if(dma1_or_int0_tx == 1)
+	{
+		LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_7, LL_DMA_REQUEST_2);
+		LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_7, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+		LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_7, LL_DMA_PRIORITY_LOW);
+		LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_7, LL_DMA_MODE_NORMAL);
+		LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_7, LL_DMA_PERIPH_NOINCREMENT);
+		LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_7, LL_DMA_MEMORY_INCREMENT);
+		LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_7, LL_DMA_PDATAALIGN_BYTE);
+		LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_7, LL_DMA_MDATAALIGN_BYTE);
+
+		LL_DMA_SetPeriphAddress(DMA1, LL_DMA_CHANNEL_7, (uint32_t)&USART2->TDR);
+		//LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, DMATXLEN);			// No need to specify len as no transfer will be initiated now
+		LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_7, (uint32_t)_serial_uart_tx_dma_buffer);
+
+		// Enable HT & TC interrupts
+		//LL_DMA_EnableIT_HT(DMA1, LL_DMA_CHANNEL_7);
+		LL_DMA_EnableIT_TC(DMA1, LL_DMA_CHANNEL_7);		// Only transmit complete is needed in normal mode
+		//LL_DMA_EnableIT_TE(DMA1, LL_DMA_CHANNEL_7);
+	}
 
 
 	// USART configuration
@@ -1015,7 +1209,8 @@ void serial_uart_init_ll(int dma1_or_int0)
 	USART_InitStruct.StopBits = LL_USART_STOPBITS_1;
 	USART_InitStruct.Parity = LL_USART_PARITY_NONE;
 	USART_InitStruct.TransferDirection = LL_USART_DIRECTION_TX_RX;
-#warning TODO: reactivate RTC and CTS
+	// In RX DMA RTS is done in software.
+	// CTS is done in hardware in TX by DMA and by interrupt
 	if(dma1_or_int0 == 0)
 	{
 		USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_RTS_CTS;
@@ -1024,17 +1219,23 @@ void serial_uart_init_ll(int dma1_or_int0)
 	{	// DMA mode -> only CTS (flow control for transfer) for now
 		USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_CTS;
 	}
-	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;
+
+
+	//USART_InitStruct.HardwareFlowControl = LL_USART_HWCONTROL_NONE;		// Override
+
 	USART_InitStruct.OverSampling = LL_USART_OVERSAMPLING_16;
 	ErrorStatus status = LL_USART_Init(USART2, &USART_InitStruct);
 	if(status == ERROR)
-		fprintf(file_pri,"Error init USART\n");
+		fprintf(file_usb,"Error init USART\n");
 	LL_USART_ConfigAsyncMode(USART2);
 
 	if(dma1_or_int0 == 1)
 		LL_USART_EnableDMAReq_RX(USART2);
+	if(dma1_or_int0_tx == 1)
+		LL_USART_EnableDMAReq_TX(USART2);
 
-	LL_USART_EnableIT_TXE(USART2);
+	if(dma1_or_int0_tx == 0)
+		LL_USART_EnableIT_TXE(USART2);			// No TX DMA -> enable TXE interrupt
 	LL_USART_EnableIT_CTS(USART2);
 	if(dma1_or_int0 == 0)
 		LL_USART_EnableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
@@ -1066,6 +1267,9 @@ void serial_uart_init_ll(int dma1_or_int0)
 	// Enable DMA
 	if(dma1_or_int0 == 1)
 		LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_6);
+	// DMA1 channel 7 only activated when actual data needs transferring
+	//if(dma1_or_int0_tx == 1)
+		//LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_7);			// Don't enable channel yet
 
 	// Enable USART
 	LL_USART_Enable(USART2);
@@ -1101,7 +1305,7 @@ void serial_uart_changespeed(int speed)
 	LL_USART_Disable(USART2);
 	ErrorStatus status = LL_USART_Init(USART2, &USART_InitStruct);
 	if(status == ERROR)
-		fprintf(file_pri,"Error init USART\n");
+		fprintf(file_usb,"Error init USART\n");
 	LL_USART_ConfigAsyncMode(USART2);
 	LL_USART_Enable(USART2);
 
@@ -1152,7 +1356,15 @@ void serial_uart_printevents(FILE *f)
 	fprintf(f,"\tIdle: %lu\n",Serial1Idle);
 	fprintf(f,"\tDMARXOverrun: %lu\n",Serial1DMARXOverrun);
 	fprintf(f,"\tDMARXInt: %lu\n",Serial1DMARXInt);
+	fprintf(f,"\tDMATXInt: %lu\n",Serial1DMATXInt);
 	fprintf(f,"\tEvents during interrupt: %lu\n",Serial1EvtWithinInt);
+
+	// Print if
+	fprintf(f,"CR1: %08X\n",USART2->CR1);
+	fprintf(f,"CR1: idle %d\n",(USART2->CR1&0x10)?1:0);
+	fprintf(f,"CR1: rxne %d\n",(USART2->CR1&0x20)?1:0);
+	fprintf(f,"CR1: tc %d\n",(USART2->CR1&0x40)?1:0);
+	fprintf(f,"CR1: txe %d\n",(USART2->CR1&0x80)?1:0);
 }
 void serial_uart_clearevents()
 {
@@ -1166,6 +1378,7 @@ void serial_uart_clearevents()
 	Serial1Idle=0;
 	Serial1DMARXOverrun=0;
 	Serial1DMARXInt=0;
+	Serial1DMATXInt=0;
 	Serial1EvtWithinInt = 0;
 	Serial1Int=0;
 }
@@ -1190,5 +1403,4 @@ void _serial_usart_rts_clear()
 	}
 
 }
-
 

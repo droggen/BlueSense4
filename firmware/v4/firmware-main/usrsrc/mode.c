@@ -163,7 +163,7 @@ void mode_dispatch(void)
 				mode_audio();
 				system_mode=APP_MODE_MAIN;
 				break;
-			case APP_MODE_BENCHMARKCPU:
+			case APP_MODE_BENCHMARK:
 				mode_benchmarkcpu();
 				system_mode=APP_MODE_MAIN;
 				break;

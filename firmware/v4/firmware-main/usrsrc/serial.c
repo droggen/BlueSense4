@@ -290,6 +290,11 @@ unsigned char serial_isblocking(FILE *file)
 	SERIALPARAM *p = (SERIALPARAM*)file->_cookie;
 	return p->blocking;
 }*/
+void serial_setblockingwrite(FILE *file,unsigned char blocking)
+{
+	SERIALPARAM *p = (SERIALPARAM*)file->_cookie;
+	p->blockingwrite = blocking;
+}
 
 /*char *fgets_timeout( char *str, int num, FILE *stream, int timeout)
 {

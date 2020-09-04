@@ -79,6 +79,7 @@ unsigned long timer_ms_get_intclk(void);
 unsigned long timer_s_wait(void);
 unsigned long timer_s_get(void);
 unsigned long timer_s_get_frommidnight(void);
+void timer_us_wait(unsigned long us);
 
 // Call this function from an interrupt routine every herz, if available, e.g. from a RTC
 void _timer_tick_hz(void);

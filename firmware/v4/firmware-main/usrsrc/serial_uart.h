@@ -37,6 +37,7 @@ extern volatile unsigned long Serial1TXE;					// Data overrun
 extern volatile unsigned long Serial1RXNE;					// Data overrun
 extern volatile unsigned long Serial1DMARXInt;
 extern volatile unsigned long Serial1DMARXOverrun;
+extern volatile unsigned long Serial1DMATXInt;
 extern volatile unsigned long Serial1Int;					// Total interrupt
 extern volatile unsigned long Serial1EvtWithinInt;
 
@@ -47,7 +48,10 @@ extern volatile unsigned long Serial1EvtWithinInt;
 // A larger DMA buffer reduces the interrupt load and gives more advance warning to the peripheral to stop transmitting data
 #define SERIAL_UART_DMA_RX_BUFFERSIZE 64
 
+#define DMATXLEN 64
+
 extern volatile unsigned char _serial_uart_rx_dma_buffer[];
+extern volatile unsigned char _serial_uart_tx_dma_buffer[DMATXLEN];
 
 #define USART_FLAG_TXE		0x80
 #define USART_FLAG_RXNE		0x20
@@ -59,7 +63,7 @@ extern volatile unsigned char _serial_uart_rx_dma_buffer[];
 
 
 
-int serial_uart_init(USART_TypeDef *h,int dma1_or_int0);
+int serial_uart_init(USART_TypeDef *h,int dma1_or_int0,int dma1_or_int0_tx);
 SERIALPARAM *serial_uart_getserialparam(int p);
 
 void USART2_IRQHandler(void);
@@ -92,12 +96,13 @@ ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __
 ssize_t serial_uart_cookieread_int(void *__cookie, char *__buf, size_t __n);
 
 void serial_uart_dma_rx(unsigned char serialid);
+void serial_uart_dma_tx(unsigned char serialid);
 
 void _serial_usart_rts_set();
 void _serial_usart_rts_clear();
 
 // Initialisation and change speed
-void serial_uart_init_ll(int dma1_or_int0);
+void serial_uart_init_ll(int dma1_or_int0,int dma1_or_int0_tx);
 void serial_uart_changespeed(int speed);
 
 // Buffer manip
