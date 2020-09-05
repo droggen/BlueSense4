@@ -357,7 +357,7 @@ unsigned char system_batterystat(unsigned char unused)
 		{
 			// Turn off before hard reset
 			// This appears to address a bug where the RTC loses time (does not detect power fail) when long-pressing the power button)
-			_system_off();
+			//_system_off();
 
 		}
 		return 0;

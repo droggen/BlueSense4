@@ -88,8 +88,11 @@ unsigned char max31343_isok()
 *******************************************************************************
 	Initialise the RTC.
 
-	There is little to do except disabling interrupts, and enabling the IRQ for
-	EXTI2.
+	Disable interrupts, enable the IRQ for EXTI2 (SQW).
+	Also, set RTC to operate manually from the battery backup, as experimentation has
+	shown issues with the automatic switch between vcc and vbat occasionally does not work.
+
+
 
 
 	Parameters:
@@ -125,6 +128,8 @@ unsigned char max31343_init()
 	// Default settings are OK.
 	// RTC_config2:
 	// Default settings are OK. Square wave is always active.
+	// PRW_MGMT:
+	max31343_writereg(0x18,0x3C);		// Manual mode; selection of VBat; leave PFVT to 3 (2.4V) although this is not used in manual mode
 
 	fprintf(file_pri,"\tBoot status: %02X\n",max31341_get_boot_status());
 

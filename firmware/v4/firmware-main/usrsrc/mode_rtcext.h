@@ -26,5 +26,6 @@ unsigned char CommandParserRTCExtTest1(char *buffer,unsigned char size);
 unsigned char CommandParserRTCExtTest2(char *buffer,unsigned char size);
 unsigned char CommandParserRTCExtTemp(char *buffer,unsigned char size);
 unsigned char CommandParserRTCExtBootStatus(char *buffer,unsigned char size);
+unsigned char CommandParserRTCExtPowerSel(char *buffer,unsigned char size);
 
 #endif /* MODE_RTCEXT_H_ */

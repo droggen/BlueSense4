@@ -37,6 +37,7 @@ const COMMANDPARSER CommandParsersRTCExt[] =
 	{'S', CommandParserRTCExtBgdReadStatus,"Read status register in background (interrupt driven)"},
 	{'T', CommandParserRTCExtTemp,"Read temperature"},
 	{'B', CommandParserRTCExtBootStatus,"Status byte on boot"},
+	{'p', CommandParserRTCExtPowerSel,"p,<m>: select power source: 0: battey, 1: vcc, 2: auto"},
 	{0,0,"---- Development ----"},
 
 	{'1', CommandParserRTCExtTest1,"test 1"},
@@ -302,5 +303,31 @@ unsigned char CommandParserRTCExtBootStatus(char *buffer,unsigned char size)
 	fprintf(file_pri,"\tBoot status: %02X\n",max31341_get_boot_status());
 
 	return 0;
+
+}
+unsigned char CommandParserRTCExtPowerSel(char *buffer,unsigned char size)
+{
+	int m;
+	unsigned char r;
+	unsigned char pmgmt[3] = {0x3C,0x34,0x30};			// battery, vcc, auto
+	unsigned char *str[3] = {"Battery","VCC","Auto"};
+
+
+	if(ParseCommaGetInt(buffer,1,&m))
+		return 2;
+	if(m<0 || m>2)
+		return 2;
+
+	fprintf(file_pri,"Setting power source to %s\n",str[m]);
+
+	max31343_readreg(0x18,&r);
+	fprintf(file_pri,"Previous PWR_MGMT register: %02X\n",r);
+	max31343_writereg(0x18,pmgmt[m]);
+	max31343_readreg(0x18,&r);
+	fprintf(file_pri,"New PWR_MGMT register: %02X\n",r);
+
+
+	return 0;
+
 
 }
