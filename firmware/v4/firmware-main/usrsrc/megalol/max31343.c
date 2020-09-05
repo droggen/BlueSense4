@@ -39,6 +39,7 @@ TODO:
 
 // Indicates if power is lost
 unsigned __max31343_powerlost=0;
+unsigned char _max31343_init_status;
 
 // Custom function to call in the RTC interrupt handler every second
 void (*max31343_irqhandler)()=0;
@@ -66,10 +67,16 @@ I2C_TRANSACTION __max31343_trans_read_status;						// I2C transaction to read RT
 unsigned char max31343_isok()
 {
 	unsigned char d;
+	static unsigned char firsttime=1;
 
 
 	unsigned char rv = i2c_readreg(MAX31343_ADDRESSS,0,&d);
 	//fprintf(file_pri,"isok: reg %d\n",d);
+	if(firsttime)
+	{
+		_max31343_init_status = d;
+		firsttime=0;
+	}
 
 	if(rv!=0)
 		return 0;
@@ -118,6 +125,8 @@ unsigned char max31343_init()
 	// Default settings are OK.
 	// RTC_config2:
 	// Default settings are OK. Square wave is always active.
+
+	fprintf(file_pri,"\tBoot status: %02X\n",max31341_get_boot_status());
 
 	/*
 	Assume initialisation is done with CubeMX: ETI2 interrupt, rising edge, pull-up
@@ -664,4 +673,20 @@ int max31343_get_temp()
 unsigned char max31341_sqw()
 {
 	return (HAL_GPIO_ReadPin(RTC_SQW_GPIO_Port,RTC_SQW_Pin)==GPIO_PIN_RESET)?0:1;
+}
+/******************************************************************************
+	max31341_get_boot_status
+*******************************************************************************
+	Returns the square wave signal
+
+	Parameters:
+		-
+	Returns:
+		0		-		sqw is low (microcontroller input pin is 0)
+		1		-		sqw is hgh (microcontroller input pin is 1)
+
+******************************************************************************/
+unsigned char max31341_get_boot_status()
+{
+	return _max31343_init_status;
 }

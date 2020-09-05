@@ -373,10 +373,14 @@ void _interface_update(signed char cur_bt_connected,signed char cur_usb_connecte
 void interface_swap(void)
 {
 	FILE *f;
-	f=file_pri;
-	file_pri=file_dbg;
-	file_dbg=f;
-	stdin=stdout=stderr=file_pri;	
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	{
+		f=file_pri;
+		file_pri=file_dbg;
+		file_dbg=f;
+		stdin=stdout=stderr=file_pri;
+	}
+
 	interface_hellopri();
 	interface_hellodbg();
 }

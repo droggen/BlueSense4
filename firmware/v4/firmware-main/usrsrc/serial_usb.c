@@ -64,8 +64,8 @@ Modifications required to the ST USB CDC stack:
 
 SERIALPARAM SERIALPARAM_USB;
 
-volatile unsigned char USB_RX_DataBuffer[USB_BUFFERSIZE];
-volatile unsigned char USB_TX_DataBuffer[USB_BUFFERSIZE];
+unsigned char USB_RX_DataBuffer[USB_BUFFERSIZE];
+unsigned char USB_TX_DataBuffer[USB_BUFFERSIZE];
 
 uint8_t CDC_TryTransmit_FS();
 
@@ -87,16 +87,26 @@ void trytxbletooth()
 }
 #endif
 
+#if 0
+/*
+	The rationale for _serial_usb_trigger_background_tx is to trigger background fflush to empty the stdio buffer.
+	However, fflush does not appear thread-safe with the other stdio functions. Therefore, this should not be used.
+*/
 unsigned char _serial_usb_trigger_background_tx(unsigned char p)
 {
 	(void)p;
 
-	fflush(file_usb);
-	if(buffer_level(&SERIALPARAM_USB.txbuf))
-		CDC_TryTransmit_FS();
+	struct _reent r;
+
+	//fflush(file_usb);
+	//fflush_unlocked(file_usb);
+	//_fflush_r(&r,file_usb);
+	//if(buffer_level(&SERIALPARAM_USB.txbuf))
+		//CDC_TryTransmit_FS();
 
 	return 0;
 }
+#endif
 
 char stdiobuf[64];
 
@@ -140,8 +150,9 @@ FILE *serial_open_usb()
 
 	fprintf(f,"Find from file %p, serialparam: %p\n",f,serial_findserialparamfromfile(f));*/
 
-	// Register USB write callback at low rate to flush stdio and write data
-	timer_register_callback(_serial_usb_trigger_background_tx,199);		// 1000Hz/200 = 5Hz (200ms latency)
+	// [Register USB write callback at low rate to flush stdio and write data]: Do not use - not thread safe
+	//timer_register_callback(_serial_usb_trigger_background_tx,9);		// 1000Hz/10 = 100Hz
+	//timer_register_callback(_serial_usb_trigger_background_tx,199);		// 1000Hz/200 = 5Hz (200ms latency)
 	//timer_register_callback(serial_usb_txcallback,3999);		// 1000Hz/2000 = 0.5Hz
 
 
@@ -194,7 +205,7 @@ ssize_t serial_usb_cookie_read(void *__cookie, char *__buf, size_t __n)
 extern uint8_t UserTxBufferFS[];
 ssize_t serial_usb_cookie_write(void *__cookie, const char *__buf, size_t __n)
 {
-	size_t i;
+	size_t i=0;
 
 
 	// Debug: "silent writes"
@@ -221,9 +232,9 @@ ssize_t serial_usb_cookie_write(void *__cookie, const char *__buf, size_t __n)
 		if(!is_in_interrupt())
 		{
 			// Block only if the buffer is large enough to have a chance to hold the data
-			if(USB_BUFFERSIZE>__n)
+			if(sp->txbuf.size>__n)
 			{
-				while(buffer_freespace(&SERIALPARAM_USB.txbuf)<__n)
+				while(buffer_freespace(&sp->txbuf)<__n)
 					__NOP();
 			}
 		}
@@ -237,15 +248,19 @@ ssize_t serial_usb_cookie_write(void *__cookie, const char *__buf, size_t __n)
 	}
 
 
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)		// Not needed as isfull and buffer_put deactivate int
+	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)		// Overall lock to use the faster non-lock _buffer_put
 	{
+		// Get space in buffer
+		unsigned maxn = buffer_freespace(&SERIALPARAM_USB.txbuf);
+		// Compute how much can be written
+		if(maxn<__n)
+			__n = maxn;
+
 		// Put the data in buffer
 		for(i=0;i<__n;i++)
 		{
-			// Non-blocking, but data buffered by FILE so no data loss.
-			if(buffer_isfull(&SERIALPARAM_USB.txbuf))
-				break;
-			buffer_put(&SERIALPARAM_USB.txbuf,__buf[i]);
+			//buffer_put(&SERIALPARAM_USB.txbuf,__buf[i]);
+			_buffer_put(&SERIALPARAM_USB.txbuf,__buf[i]);		// Can use the non-locking version
 			//printf("%c ",__buf[i]);
 		}
 	}
@@ -298,7 +313,7 @@ unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 		}
 	}
 
-	// Send only sporadically
+	// Send only sporadically to speed up
 	if(isnewline || buffer_level(&SERIALPARAM_USB.txbuf)>=16)
 		CDC_TryTransmit_FS();
 
@@ -343,4 +358,5 @@ void serial_usb_clearbuffers(void)
 	buffer_clear(&SERIALPARAM_USB.txbuf);
 	buffer_clear(&SERIALPARAM_USB.rxbuf);
 }
+
 

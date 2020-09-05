@@ -66,7 +66,7 @@ extern volatile unsigned char _serial_uart_tx_dma_buffer[DMATXLEN];
 int serial_uart_init(USART_TypeDef *h,int dma1_or_int0,int dma1_or_int0_tx);
 SERIALPARAM *serial_uart_getserialparam(int p);
 
-void USART2_IRQHandler(void);
+//void USART2_IRQHandler(void);
 //void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
 
 
@@ -88,6 +88,8 @@ int serial_uart_getrxbuflevel(int p);
 
 // Interrupt driven functions
 void serial_usart_irq(USART_TypeDef *h);
+void serial_usart_dma_rx_irq();
+void serial_usart_dma_tx_irq();
 //void serial_usart_interruptenable(USART_TypeDef *h);
 int serial_uart_putchar_block_int(char c, int p);
 int serial_uart_getchar_nonblock_int(int p);
@@ -100,6 +102,7 @@ void serial_uart_dma_tx(unsigned char serialid);
 
 void _serial_usart_rts_set();
 void _serial_usart_rts_clear();
+void _serial_usart_enable_debug_irq(unsigned char en);
 
 // Initialisation and change speed
 void serial_uart_init_ll(int dma1_or_int0,int dma1_or_int0_tx);

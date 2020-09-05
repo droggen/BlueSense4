@@ -61,6 +61,7 @@ TODO:
 
 ******************************************************************************/
 
+unsigned char _serial_usart_debug_irq_enabled=0;
 
 #warning significant overrun errors when receiving data at 460K.
 
@@ -128,8 +129,9 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 {
 	FILE *f=0;
 
-	int p = serial_uart_init(periph,0,0);			// 1 for DMA; 0 for interrupt
-	//int p = serial_uart_init(periph,1,1);			// 1 for DMA; 0 for interrupt
+	//int p = serial_uart_init(periph,0,0);			// 1 for DMA; 0 for interrupt
+	int p = serial_uart_init(periph,1,1);			// 1 for DMA; 0 for interrupt
+	//int p = serial_uart_init(periph,0,1);			// 1 for DMA; 0 for interrupt 1,0 works; 1,1 and 0,1 does not
 
 	//itmprintf("aft serial_uart_init\n");
 
@@ -158,10 +160,10 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	//itmprintf("fopencookie: %p\n",f);
 
 	// Buffering can lead to issues when entering command modes ($$$)
-	setvbuf (f, 0, _IONBF, 0 );	// No buffering
+	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	//setvbuf (f, 0, _IOLBF, 1024);	// Line buffer buffering
 	//setvbuf (f, 0, _IOLBF, 16);	// Line buffer buffering
-	//setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
@@ -444,13 +446,13 @@ INTERRUPT DRIVEN --- INTERRUPT DRIVEN --- INTERRUPT DRIVEN --- INTERRUPT DRIVEN
 ******************************************************************************/
 void serial_usart_irq(USART_TypeDef *h)
 {
-	//itmprintf("i %04X\n",h->SR);
-
 	Serial1Int++;
 
 	unsigned sr = h->ISR;			// Get SR once
 
 	//fprintf(file_pri,"IRQ %08X\n",sr);
+	if(_serial_usart_debug_irq_enabled)
+		itmprintf("I %X\n",sr);
 	//fprintf(file_usb,"IRQ %08X\n",sr);
 	//fprintf(file_usb,"I\n");
 
@@ -490,6 +492,7 @@ void serial_usart_irq(USART_TypeDef *h)
 		Serial1CTS++;
 		h->ICR|=USART_ICR_CTSCF;
 		itmprintf("CTS\n");
+		//fprintf(file_pri,"CTS\n");
 	}
 
 	// RX interrupt - used only in non-DMA mode
@@ -580,10 +583,10 @@ void serial_usart_irq(USART_TypeDef *h)
 	// Check SR again - it should be zero unless another event occurred during this interrupt
 	sr = h->ISR;
 	// Keep the interesting bits: LBD, TXE, RXNE, ORE, NF, FE, PE
-	sr = sr & 0b0110101111;
+	sr = sr & 0b1100101111;
 	if(sr)
 	{
-		//itmprintf("%04X\n",sr);
+		itmprintf("I %08X\n",sr);
 		Serial1EvtWithinInt++;
 	}
 }
@@ -760,15 +763,23 @@ void serial_usart_dma_tx_irq()
 ******************************************************************************/
 void serial_uart_dma_tx(unsigned char serialid)
 {
-	//fprintf(file_usb,"serial_uart_dma_tx\n");
+
+
 
 	// Check if any data to transfer in the tx circular buffer
 	unsigned buflevel = buffer_level(&_serial_uart_param[serialid].txbuf);
+
+	//
+	//fprintf(file_pri,"serial_uart_dma_tx buflvl: %d\n",buflevel);
+
 	if(buflevel==0)
 		return;
 	// Check if ongoing DMA transfer. If yes, return.
 	if(LL_DMA_IsEnabledChannel(DMA1,LL_DMA_CHANNEL_7))
+	{
+		//fprintf(file_pri,"err dma en\n");
 		return;
+	}
 	// Channel is free and data is available - fill in data
 	unsigned n=buflevel;
 	if(DMATXLEN<n)
@@ -785,6 +796,9 @@ void serial_uart_dma_tx(unsigned char serialid)
 	LL_DMA_ClearFlag_TE7(DMA1);
 	// Start transfer
 	LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_7);
+
+	// Channel enabled
+	//fprintf(file_pri,"done\n");
 }
 
 
@@ -899,6 +913,21 @@ ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __
 	// Convert cookie to SERIALPARAM
 	SERIALPARAM *sp = (SERIALPARAM*)__cookie;
 
+	// Check if must block until space available
+	if(sp->blockingwrite)
+	{
+		// Block only if not in interrupt (e.g. if fprintf called from interrupt), otherwise buffers will never empty
+		if(!is_in_interrupt())
+		{
+			// Block only if the buffer is large enough to have a chance to hold the data
+			if(sp->txbuf.size>__nbytes)
+			{
+				while(buffer_freespace(&sp->txbuf)<__nbytes)
+					__NOP();
+			}
+		}
+	}
+
 
 	//fprintf(file_usb,"wr %d\n",__nbytes);
 	//itmprintf("wr %d\n",__nbytes);
@@ -961,6 +990,7 @@ ssize_t serial_uart_cookiewrite_int(void *__cookie, const char *__buf, size_t __
 	{
 		// DMA mode: only start DMA once the data has been copied to the circular buffer.
 		serial_uart_dma_tx(0);		// Hacked to first usart
+		//fprintf(file_pri,"trg wr\n");
 	}
 	return nw;
 }
@@ -1402,5 +1432,10 @@ void _serial_usart_rts_clear()
 		//fprintf(file_pri,"*r\n");
 	}
 
+}
+
+void _serial_usart_enable_debug_irq(unsigned char en)
+{
+	_serial_usart_debug_irq_enabled=en;
 }
 

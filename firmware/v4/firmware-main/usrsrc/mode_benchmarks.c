@@ -53,27 +53,30 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'1', CommandParserBenchmarkCPU1,help_benchmarkcpu1},
 	{'2', CommandParserBenchmarkCPU2,help_benchmarkcpu2},
 	{'M', CommandParserBenchmarkCPUMem,"Memory transfer"},
+	{'P',CommandParserBenchmarkPerf,"Perf bench"},
 	{0,0,"---- Interface benchmarks ----"},
 	{'U', CommandParserBenchUSB,help_benchusb},
 	{'B', CommandParserBenchBT,help_benchbt},
 	{'I', CommandParserBenchITM,help_benchitm},
 	{'W',CommandParserIntfWriteBench,"W,intf,ns,m Test write speed during ns seconds on intf (0=USB, 1=bluetooth) with method m (0=fputs, 1=putfbuf)"},
+	{'b',CommandParserIntfBuf,"B,intf,buf,type sets the buffer size to buf for intf (0=USB, 1=bluetooth). buf=0 is no buffering, otherwise line buffered"},
+	{'S',CommandParserIntfStatus,"Show interface status until keypress"},
+	{'E',CommandParserIntfEvents,"Show UART event counters"},
+	{'C',CommandParserIntfEventsClear,"Clear UART event counters"},
 
+
+
+
+
+	// change the vbuf?
+	{0,0,"---- Power ----"},
+	{'p',CommandParserBenchmarkPower,"Power consumption"},
+	{0,0,"---- various benchmarks ----"},
 	{'f',CommandParserFlush,"Flush"},
 	{'d',CommandParserDump,"Dump to itm"},
 	{'i',CommandParserInt,"Interrupt tests"},
 	{'u', CommandParserUSBDirect,"USB Direct write"},
 
-
-
-	// change the vbuf?
-	{'b',CommandParserIntfBuf,"B,intf,buf,type sets the buffer size to buf for intf (0=USB, 1=bluetooth). buf=0 is no buffering, otherwise line buffered"},
-	{'S',CommandParserIntfStatus,"Show interface status until keypress"},
-	{'E',CommandParserIntfEvents,"Show UART event counters"},
-	{'C',CommandParserIntfEventsClear,"Clear UART event counters"},
-	{0,0,"---- Power ----"},
-	{'P',CommandParserBenchmarkPower,"Power consumption"},
-	{0,0,"---- various benchmarks ----"},
 	{'X',CommandParserBenchmarkFlush,"Benchmark fflush"},
 	{'x',CommandParserBenchmarkLatency,"Benchmark write to display latency"},
 };
@@ -218,12 +221,12 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	unsigned benchtime = 2;			// benchmark duration in seconds
 	char s[payloadsize+1];			// Payload
 
-	char *name[3] = {"fprintf","fwrite","fputbuf"};
-	unsigned result_dts[3];
-	unsigned result_dt[3];
-	unsigned result_nwritten[3];
-	unsigned result_bps[3];
-	unsigned result_nit[3];
+	char *name[4] = {"fprintf","fwrite","fputs","fputbuf"};
+	unsigned result_dts[4];
+	unsigned result_dt[4];
+	unsigned result_nwritten[4];
+	unsigned result_bps[4];
+	unsigned result_nit[4];
 
 
 	// Fill buffer with data. Last character is \n.
@@ -234,6 +237,12 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 
 
 	fprintf(finfo,"Benchmarking\n");
+
+	// Enable blocking write
+	fprintf(finfo,"Enabling blocking writes\n");
+	//serial_setblockingwrite(fbench,1);
+	serial_setblockingwrite(file_usb,1);
+	serial_setblockingwrite(file_bt,1);
 
 	// Benchmark fwrite, fputs, fputc
 
@@ -250,7 +259,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
-		int nw = fprintf(fbench,"%s",s);
+		fprintf(fbench,"%s",s);
 		//fprintf(file_pri,"%d\n",nw);
 		//if(nw>0)
 		nwritten += payloadsize;		// normally fprintf should return the number of bytes written; here returns -1 but is blocking and successful
@@ -261,7 +270,8 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	result_dts[0] = (t_cur-t_last)*1000;
 	result_dt[0] = tint2-tint1;
 	result_nwritten[0] = nwritten;
-	result_bps[0] = nwritten*1000/(tint2-tint1);
+	//result_bps[0] = nwritten*1000/result_dts[0];
+	result_bps[0] = nwritten*125/128/result_dts[0];
 	result_nit[0] = nit;
 	HAL_Delay(500);
 
@@ -284,9 +294,35 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	result_dt[1] = tint2-tint1;
 	result_dts[1] = (t_cur-t_last)*1000;
 	result_nwritten[1] = nwritten;
-	result_bps[1] = nwritten*1000/(tint2-tint1);
+	//result_bps[1] = nwritten*1000/result_dts[1];
+	result_bps[1] = nwritten*125/128/result_dts[1];
 	result_nit[1] = nit;
 	HAL_Delay(500);
+
+	// fputs
+
+	fprintf(finfo,"Benchmarking fputs for %u seconds.\n",benchtime);
+
+	nwritten = 0;
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		int nw = fputs(s,fbench);
+		if(nw>=0)
+		nwritten+=payloadsize;								// Number of elements successfully written
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+
+	result_dt[2] = tint2-tint1;
+	result_dts[2] = (t_cur-t_last)*1000;
+	result_nwritten[2] = nwritten;
+	//result_bps[2] = nwritten*1000/result_dts[2];
+	result_bps[2] = nwritten*125/128/result_dts[2];
+	result_nit[2] = nit;
+	HAL_Delay(500);
+
 
 	// fputbuf
 
@@ -302,24 +338,30 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 		nit++;
 	}
 	tint2=timer_ms_get_intclk();
-	fprintf(file_pri,"tlast: %d tcur: %d\n",t_last,t_cur);
 
-	result_dt[2] = tint2-tint1;
-	result_dts[2] = (t_cur-t_last)*1000;
-	result_nwritten[2] = nwritten;
-	//result_bps[2] = nwritten*1000/(tint2-tint1);
-	result_bps[2] = nwritten*1000/result_dts[2];		// Use second timer, as millisecond may loose interrupts under heavy load
-	result_nit[2] = nit;
+	result_dt[3] = tint2-tint1;
+	result_dts[3] = (t_cur-t_last)*1000;
+	result_nwritten[3] = nwritten;
+	//result_bps[3] = nwritten*1000/result_dts[3];		// Use second timer, as millisecond may loose interrupts under heavy load
+	result_bps[3] = nwritten*125/128/result_dts[3];		// Use second timer, as millisecond may loose interrupts under heavy load
+	result_nit[3] = nit;
 	HAL_Delay(500);
 
-	for(int i=0;i<3;i++)
+
+	// Disable blocking write
+	fprintf(finfo,"Disabling blocking writes\n");
+	//serial_setblockingwrite(fbench,0);
+	serial_setblockingwrite(file_usb,0);
+	serial_setblockingwrite(file_bt,0);
+
+	for(int i=0;i<4;i++)
 	{
 		fprintf(finfo,"Benchmark of %s\n",name[i]);
-		fprintf(finfo,"\tTime: %lu ms. (with ms int)\n",result_dt[i]);
-		fprintf(finfo,"\tTime: %lu ms. (with sec. int)\n",result_dts[i]);
+		fprintf(finfo,"\tTime: %u ms. (with ms int)\n",result_dt[i]);
+		fprintf(finfo,"\tTime: %u ms. (with sec. int)\n",result_dts[i]);
 		fprintf(finfo,"\tIterations: %u.\n",result_nit[i]);
 		fprintf(finfo,"\tBytes written: %u.\n",result_nwritten[i]);
-		fprintf(finfo,"\tBandwidth: %lu bps.\n",result_bps[i]);
+		fprintf(finfo,"\tBandwidth: %u KB/s.\n",result_bps[i]);
 	}
 
 
@@ -417,17 +459,13 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 		fprintf(file_pri,"Invalid method\n");
 		return 2;
 	}
-	if(ns<0 || ns > 10)
+	if(ns<0 || ns > 100)
 	{
 		fprintf(file_pri,"Invalid duration\n");
 		return 0;
 	}
 
 	fprintf(file_pri,"Benchmark write on interface %s for %d seconds with method %s\n",intf?"BT":"USB",ns,method?"fputbuf":"fputs");
-
-	// Enable blocking write
-	fprintf(file_pri,"Enabling blocking writes\n");
-	//serial_setblockingwrite(file_pri,1);
 
 	// Select interface
 	FILE *fi;
@@ -449,6 +487,12 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	}
 	//buf[n-1]='\n';
 	buf[n]=0;
+
+	// Enable blocking write
+	fprintf(file_pri,"Enabling blocking writes\n");
+	//serial_setblockingwrite(fi,1);
+	serial_setblockingwrite(file_usb,1);
+	serial_setblockingwrite(file_bt,1);
 
 
 	unsigned wr=0;
@@ -490,11 +534,17 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	}
 	dt = (ts2-ts1)*1000;
 	// Wait for the buffers to empty, as fprintf is non-blocking
-	HAL_Delay(500);
-
+	//HAL_Delay(500);
+	for(int i=0;i<1;i++)
+	{
+		HAL_Delay(500);
+		fprintf(file_usb,"Completed\n");
+	}
 	// Disable blocking write
 	fprintf(file_pri,"Disabling blocking writes\n");
-	serial_setblockingwrite(file_pri,0);
+	//serial_setblockingwrite(fi,0);
+	serial_setblockingwrite(file_usb,0);
+	serial_setblockingwrite(file_bt,0);
 
 
 	fprintf(file_pri,"\n");
@@ -830,4 +880,11 @@ unsigned char CommandParserBenchmarkLatency(char *buffer,unsigned char size)
 		fprintf(file_pri,"Write done\n\n");
 	}
 
+}
+
+unsigned char CommandParserBenchmarkPerf(char *buffer,unsigned char size)
+{
+	unsigned long refperf = system_perfbench(2);
+	fprintf(file_pri,"Reference performance: %lu\n",refperf);
+	return 0;
 }

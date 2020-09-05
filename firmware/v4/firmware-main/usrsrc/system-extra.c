@@ -162,10 +162,7 @@ void system_storepowerdata()
 	buffer[11] = 0x55;		// Termination
 	buffer[12] = 0xAA;
 
-	unsigned char rv = eeprom_write_buffer_try_nowait(STATUS_ADDR_OFFCURRENT_VALID,buffer,13);
-
-	//eeprom_write_buffer_try_nowait(STATUS_ADDR_OFFCURRENT_VALID,"0123456789ABCD",13);
-
+	eeprom_write_buffer_try_nowait(STATUS_ADDR_OFFCURRENT_VALID,buffer,13);
 }
 
 void system_loadpowerdata(_POWERUSE_DATA *pu)
@@ -335,23 +332,33 @@ unsigned char system_batterystat(unsigned char unused)
 	if(newpc==1)
 	{
 		pressduration++;
-		if(pressduration==40)
+		if(pressduration==30)	// was 40
 		{
 			// Issue a background read of the battery state
 			ltc2942_backgroundgetstate(0);
 		}
-		if(pressduration==44)
+		if(pressduration==34)	// was 44
 		{
 			// Store the battery info
 			system_storepowerdata(STATUS_ADDR_OFFCURRENT_VALID);
-			
-			//system_led_on(LED_GREEN);	// DEBUG: Turn on green LED once power data stored
-
 		}
-		if(pressduration>40 && pressduration<45)		// Blink if greater than 4 seconds then stay on
+		if(pressduration>30 && pressduration<35)		// Blink if greater than 4 seconds then stay on		// was 40 and 45
 		//if(pressduration>40)							// Blink forever if greater than 4 seconds
 		{
 			system_led_toggle(0b001);
+		}
+		if(pressduration==35)
+		{
+			// Turn on some leds
+			system_led_on(LED_GREEN);
+			system_led_on(LED_YELLOW);
+		}
+		if(pressduration==37)
+		{
+			// Turn off before hard reset
+			// This appears to address a bug where the RTC loses time (does not detect power fail) when long-pressing the power button)
+			_system_off();
+
 		}
 		return 0;
 	}
@@ -418,6 +425,10 @@ void system_off(void)
 	system_storepowerdata(STATUS_ADDR_OFFCURRENT_VALID);
 	// Wait for the eeprom to finish writing - conservatively 50ms (5ms seems enough)
 	HAL_Delay(50);
+	_system_off();
+}
+void _system_off(void)
+{
 	// Turn off the regulator
 	HAL_GPIO_WritePin(PWR_ON_GPIO_Port,PWR_ON_Pin,GPIO_PIN_RESET);
 }
@@ -586,5 +597,6 @@ void system_info_cpu()
 	else
 		fprintf(file_pri,"LITTLE\n");
 }
+
 
 

@@ -46,5 +46,6 @@ void max31343_background_read_status();
 void max31342_sync();
 int max31343_get_temp();
 unsigned char max31341_sqw();
+unsigned char max31341_get_boot_status();
 
 #endif /* MEGALOL_MAX31343_H_ */

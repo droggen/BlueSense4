@@ -193,7 +193,7 @@ unsigned char CommandGet(const COMMANDPARSER *CommandParsers,unsigned char Comma
 	if(CommandBufferPtr<COMMANDMAXSIZE)
 	{
 		// Do nothing if the command separator has not been read yet and the buffer is not full.
-		printf("no nr|lf yet\n");
+		//printf("no nr|lf yet\n");
 		return 0;
 	}
 	// Here problem: the command buffer is full and no command separator has been received.

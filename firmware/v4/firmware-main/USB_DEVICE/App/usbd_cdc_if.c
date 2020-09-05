@@ -380,7 +380,8 @@ uint8_t CDC_TryTransmit_FS()
 			nwrite = APP_TX_DATA_SIZE;
 		for(int i=0;i<nwrite;i++)
 		{
-			UserTxBufferFS[i] = buffer_get(&SERIALPARAM_USB.txbuf);
+			//UserTxBufferFS[i] = buffer_get(&SERIALPARAM_USB.txbuf);
+			UserTxBufferFS[i] = _buffer_get(&SERIALPARAM_USB.txbuf);	// Protected by overall lock so use non-lock version
 		}
 
 		// Start the transfer
@@ -411,3 +412,4 @@ void usb_cdc_txready_callback()
   */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+

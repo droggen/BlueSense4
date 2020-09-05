@@ -90,6 +90,8 @@ void buffer_init(CIRCULARBUFFER *io, unsigned char *buffer, unsigned int sz)
 	
 	This must only be called if the buffer is not full, as no check is done on the buffer capacity.
 	
+	_buffer_put is a non-atomic variant.
+
 	Parameters:
 		io	-		CIRCULARBUFFER buffer
 		c	-		Character to add to the buffer
@@ -101,6 +103,11 @@ void buffer_put(volatile CIRCULARBUFFER *io, unsigned char c)
 		io->buffer[io->wrptr]=c;
 		io->wrptr=(io->wrptr+1)&(io->mask);
 	}
+}
+void _buffer_put(volatile CIRCULARBUFFER *io, unsigned char c)
+{
+	io->buffer[io->wrptr]=c;
+	io->wrptr=(io->wrptr+1)&(io->mask);
 }
 /******************************************************************************
    function: buffer_get

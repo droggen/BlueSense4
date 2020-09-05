@@ -255,6 +255,8 @@ void bs4_init_extended()
 	system_devname[0]='D';system_devname[1]='B';system_devname[2]='G';system_devname[3]=0;
 #endif
 
+	//_serial_usart_enable_debug_irq(1);
+
 toto1:
 
 	fprintf(file_pri,"going to initialise interface\n");

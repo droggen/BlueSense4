@@ -16,8 +16,8 @@
 
 extern SERIALPARAM SERIALPARAM_USB;
 
-extern volatile unsigned char USB_RX_DataBuffer[];
-extern volatile unsigned char USB_TX_DataBuffer[];
+extern unsigned char USB_RX_DataBuffer[];
+extern unsigned char USB_TX_DataBuffer[];
 
 
 void serial_usb_initbuffers();
@@ -38,3 +38,4 @@ unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n);
 unsigned char serial_usb_fischar(SERIALPARAM *sp);
 
 void _serial_usb_enable_write(unsigned char en);
+

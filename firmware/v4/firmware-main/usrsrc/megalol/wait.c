@@ -241,8 +241,8 @@ void _timer_tick_hz(void)
 	// Increment the 1hz update correction counter.
 	_timer_time_1hzupdatectr++;
 
-	return;	// Debug: never do correction
-
+	//return;	// Debug: never do correction
+#if 0
 	// Updating the internal time every 5s leads to <estimate ppm error>
 	const unsigned updateperiod = 5;
 	if(_timer_time_1hzupdatectr>=updateperiod)
@@ -277,7 +277,7 @@ void _timer_tick_hz(void)
 		// Reset the dividers
 		_timer_time_1024to1000_divider=0;
 	}
-	
+#endif
 
 	// Process the callbacks
 	for(unsigned char i=0;i<timer_numslowcallbacks;i++)
