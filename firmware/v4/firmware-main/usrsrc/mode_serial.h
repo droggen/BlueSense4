@@ -30,5 +30,6 @@ unsigned char CommandParserSerTestDMATx3(char *buffer,unsigned char size);
 unsigned char CommandParserSerTestDMAIsEn(char *buffer,unsigned char size);
 unsigned char CommandParserSerTestWrite(char *buffer,unsigned char size);
 unsigned char CommandParserSerTestWrite2(char *buffer,unsigned char size);
+unsigned char CommandParserSerTestWrite3(char *buffer,unsigned char size);
 
 #endif /* MODE_SERIAL_H_ */

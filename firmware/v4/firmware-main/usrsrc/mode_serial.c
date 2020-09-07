@@ -10,6 +10,7 @@
 #include "mode_main.h"
 #include "mode_serial.h"
 #include "commandset.h"
+#include "mode_benchmarks.h"
 #include "mode.h"
 #include "wait.h"
 #include "serial.h"
@@ -39,9 +40,12 @@ const COMMANDPARSER CommandParsersSerTest[] =
 	{'T', CommandParserSerTestDMATx,"Transmit with DMA"},
 	{'t', CommandParserSerTestDMATx2,"Transmit with DMA 2"},
 	{'g', CommandParserSerTestDMATx3,"Restart with DMA"},
-	{'E', CommandParserSerTestDMAIsEn,"DMA is en"},
+	{'n', CommandParserSerTestDMAIsEn,"DMA is en"},
 	{'B', CommandParserSerTestWrite,"Write lots"},
 	{'b', CommandParserSerTestWrite2,"Write lots 2"},
+	{'m', CommandParserSerTestWrite3,"Write continuously by polling - stop when keypress"},
+	{'E',CommandParserIntfEvents,"Show UART event counters"},
+	{'C',CommandParserIntfEventsClear,"Clear UART event counters"},
 	/*{'I', CommandParserRTCExtInit, "Init external RTC with default settings"},
 	{'R',CommandParserRTCExtReadAllRegisters,"Read all registers"},
 	{'r', CommandParserRTCExtReadRegister,"r,<reg>: read register <reg>"},
@@ -370,6 +374,48 @@ unsigned char CommandParserSerTestWrite2(char *buffer,unsigned char size)
 	char *b="Hello world putbuf\n";
 
 	fputbuf(file_bt,b,strlen(b));
+
+	return 0;
+}
+unsigned char CommandParserSerTestWrite3(char *buffer,unsigned char size)
+{
+	fprintf(file_pri,"Writing until keypress on USB\n");
+
+	// Works only in non-dma mode
+
+	// Deactivate interrupts
+	LL_USART_DisableIT_TXE(USART2);			// No TX DMA -> enable TXE interrupt
+	//LL_USART_EnableIT_CTS(USART2);
+	LL_USART_DisableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
+
+
+	unsigned t1,t2,n=0;
+	t1 = timer_ms_get();
+	while(1)
+	{
+		if(fischar(file_usb))
+			break;
+
+		//fprintf(file_usb,"a\n");
+		//HAL_Delay(100);
+
+		// Check CTS
+//		HAL_GPIO_ReadPin(
+
+
+		// Write to BT
+		// Transmit
+		serial_usart_putchar_block(USART2,'@');
+		n++;
+
+	}
+	t2 = timer_ms_get();
+
+	LL_USART_EnableIT_TXE(USART2);			// No TX DMA -> enable TXE interrupt
+	//LL_USART_EnableIT_CTS(USART2);
+	LL_USART_EnableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
+
+	fprintf(file_usb,"%d bytes. %d ms\n",n,t2-t1);
 
 	return 0;
 }

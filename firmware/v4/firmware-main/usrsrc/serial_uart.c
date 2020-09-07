@@ -16,6 +16,7 @@
 #include "serial_itm.h"
 #include "serial_uart.h"
 #include "usrmain.h"
+#include "mode_benchmarks.h"
 #include "atomicop.h"
 #include "serial.h"
 #include "system.h"
@@ -129,8 +130,8 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 {
 	FILE *f=0;
 
-	//int p = serial_uart_init(periph,0,0);			// 1 for DMA; 0 for interrupt
-	int p = serial_uart_init(periph,1,1);			// 1 for DMA; 0 for interrupt
+	int p = serial_uart_init(periph,0,0);			// 1 for DMA; 0 for interrupt
+	//int p = serial_uart_init(periph,1,1);			// 1 for DMA; 0 for interrupt
 	//int p = serial_uart_init(periph,0,1);			// 1 for DMA; 0 for interrupt 1,0 works; 1,1 and 0,1 does not
 
 	//itmprintf("aft serial_uart_init\n");
