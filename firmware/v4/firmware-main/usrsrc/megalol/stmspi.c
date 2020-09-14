@@ -228,6 +228,7 @@ void stmspi1_stm32l4_init(int spd)
 	br = ceil(log2((float)HAL_RCC_GetPCLK2Freq()/(float)spd)) - 1;
 	br&=0b111;		// Sanity check
 	//fprintf(file_pri,"br: %d\n",br2);
+	fprintf(file_pri,"PCLK2 frq: %u\n",HAL_RCC_GetPCLK2Freq());
 
 
 
