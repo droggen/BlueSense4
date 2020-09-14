@@ -549,7 +549,7 @@ void mode_sample_motion(void)
 	if(toterr*1000000l/stat_totsample>10)
 		fprintf(file_pri,"WARNING: HIGH SAMPLING ERRORS\n");
 
-#ifdef MSM_LOGBAT
+#if MSM_LOGBAT==1
 	mode_sample_storebatinfo();
 #endif
 

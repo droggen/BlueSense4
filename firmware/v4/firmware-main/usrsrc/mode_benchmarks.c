@@ -79,6 +79,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 
 	{'X',CommandParserBenchmarkFlush,"Benchmark fflush"},
 	{'x',CommandParserBenchmarkLatency,"Benchmark write to display latency"},
+	{'t',CommandParserBenchmarkTimer,"Timer"},
 };
 unsigned char CommandParsersBenchmarksNum=sizeof(CommandParsersBenchmarks)/sizeof(COMMANDPARSER);
 
@@ -485,7 +486,7 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	{
 		buf[i] = 'A'+(i%26);
 	}
-	//buf[n-1]='\n';
+	buf[n-1]='\n';			// Carriage return as some terminals have issues with very long lines
 	buf[n]=0;
 
 	// Enable blocking write
@@ -886,5 +887,14 @@ unsigned char CommandParserBenchmarkPerf(char *buffer,unsigned char size)
 {
 	unsigned long refperf = system_perfbench(2);
 	fprintf(file_pri,"Reference performance: %lu\n",refperf);
+	return 0;
+}
+unsigned char CommandParserBenchmarkTimer(char *buffer,unsigned char size)
+{
+	for(int i=0;i<10;i++)
+	{
+		fprintf(file_pri,"HAL_GetTick: %d\n",HAL_GetTick());
+		HAL_Delay(50);
+	}
 	return 0;
 }

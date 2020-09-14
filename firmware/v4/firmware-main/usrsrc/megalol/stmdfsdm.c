@@ -271,23 +271,23 @@ void _stm_dfsdm_init_predef(unsigned mode,unsigned char left_right)
 ******************************************************************************/
 void stm_dfsdm_acquire_start_poll(unsigned char left_right)
 {
-	//fprintf(file_pri,"stm_dfsdm_acquire_start_poll %d\n",left_right);
+	fprintf(file_pri,"stm_dfsdm_acquire_start_poll %d\n",left_right);
 
 	HAL_StatusTypeDef s;
 	assert(left_right<3);
 	if(left_right==STM_DFSDM_LEFT || left_right==STM_DFSDM_STEREO)
 	{
-		//fprintf(file_pri,"Starting left ");
+		fprintf(file_pri,"Starting left ");
 		s=HAL_DFSDM_FilterRegularStart(_stm_dfsdm_filters[0]);
-		//fprintf(file_pri,"%d\n",s);
+		fprintf(file_pri,"%d\n",s);
 		if(s!=HAL_OK)
 			fprintf(file_pri,"Error starting polling left (%d)\n",s);
 	}
 	if(left_right==STM_DFSDM_RIGHT || left_right==STM_DFSDM_STEREO)
 	{
-		//fprintf(file_pri,"Starting right ");
+		fprintf(file_pri,"Starting right ");
 		s=HAL_DFSDM_FilterRegularStart(_stm_dfsdm_filters[1]);
-		//fprintf(file_pri,"%d\n",s);
+		fprintf(file_pri,"%d\n",s);
 		if(s!=HAL_OK)
 			fprintf(file_pri,"Error starting polling right (%d)\n",s);
 	}
@@ -716,7 +716,8 @@ unsigned long stm_dfsdm_acq_poll_internal(unsigned char left_right,int *buffer,u
 
 	unsigned long t1 = timer_us_get();
 	HAL_StatusTypeDef s;
-	unsigned timeout = 10;
+	//unsigned timeout = 10;
+	unsigned timeout = 1000;
 
 	unsigned inc=1;							// Increment for loop
 	if(left_right==STM_DFSDM_STEREO)		// Stereo mode - acquire half the samples

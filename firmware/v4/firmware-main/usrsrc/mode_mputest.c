@@ -13,6 +13,7 @@
 //#include "dbg.h"
 #include "mode_mputest.h"
 //#include "mode_global.h"
+#include "mode_main.h"
 #include "mpu_config.h"
 #include "commandset.h"
 //#include "uiconfig.h"
@@ -1746,19 +1747,7 @@ unsigned char CommandParserMPUTest_SelfTest(char *buffer,unsigned char size)
 ******************************************************************************/
 void mode_mputest(void)
 {	
-	
-	while(1)
-	{
-		CommandProcess(CommandParsersMPUTest,CommandParsersMPUTestNum);
-		if(CommandShouldQuit())
-			break;
-		HAL_Delay(1);
-	}
-	
-
-
-	
-		
+	mode_run("MPUFCN",CommandParsersMPUTest,CommandParsersMPUTestNum);
 	
 	
 }

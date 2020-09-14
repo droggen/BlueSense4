@@ -45,7 +45,7 @@
 
 
 
-const char help_z[]  ="Z[,<hh><mm><ss><dd><mm><yy>]: synchronise time.\n\t\tNo parameters: reset local time/date; otherwise sets the RTC and local time/date to hhmmss ddmmyy";
+const char help_z[]  ="Z[,<hh><mm><ss><dd><mm><yy>]: synchronise time.\n\t\tNo parameters: reset local time/date";
 const char help_y[]  ="Test sync";
 const char help_demo[]  ="Demo mode";
 const char help_c[]  ="Clock mode";
@@ -62,21 +62,21 @@ const char help_ttest[]  ="Time-related tests";
 const char help_d[]  ="t[,<dd><mm><yy>] Query or set date";
 const char help_quit[]  ="Exit current mode";
 const char help_h[]  ="Help";
-const char help_a[]  ="A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging mode until keypress or ! command.\n\t\tmask: ADC channel bitmask in hex (bits 0 to 4=ext channel, 5=vbat, 6=vref, 7=temp)\n\t\tperiod: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (should be used with only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tIf logfile is specified then logs data (use -1 to force streaming).\n\t\tIf duration specified streams/log for specified number of seconds.";
-const char help_a_test[]  ="ADC test";
+const char help_a[]  ="A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging.\n\t\tInterrupt with keypress or !.\n\t\tmask: ADC channel bitmask in hex (bits 0 to 4=ext channel, 5=vbat, 6=vref, 7=temp)\n\t\tperiod: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (use only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tLogs to logfile (use -1 not to log) and runs for the specified duration.";
+const char help_a_test[]  ="Additional ADC functions";
 const char help_s[]  ="S,<us>: test streaming/logging mode; us: sample period in microseconds";
-const char help_f[]  ="F,<bin>,<pktctr>,<ts>,<bat>,<label>: bin: 1 for binary, 0 for text; for others: 1 to stream, 0 otherwise";
-const char help_M[]  ="M[,<mode>[,<logfile>[,<duration>]]: without parameters lists available modes, otherwise enters the specified mode.\n\t\tOptionally logs to logfile (use -1 not to log) and runs for the specified duration in seconds.";
-const char help_m[]  ="MPU test mode";
+const char help_f[]  ="F,<bin>,<pktctr>,<ts>,<bat>,<label>: bin: 1 for binary, 0 for text\n\t\tOther parameters: 1 to stream, 0 to omit.";
+const char help_M[]  ="M[,<mode>[,<logfile>[,<duration>]]: MPU sampling/logging.\n\t\tNo parameters to lists modes, otherwise enters the specified mode.\n\t\tLogs to logfile (use -1 not to log) and runs for the specified duration.";
+const char help_m[]  ="Additional MPU functions";
 const char help_g[]  ="G,<mode> enters motion recognition mode. The parameter is the sample rate/channels to acquire. Use G? to find more about modes";
 const char help_O[]  ="O[,<sec>] Power off and no wakeup, or wakeup after <sec> seconds.";
-const char help_o[]  ="Display power used in off mode; if the node was turned off with O or with a hard reset";
+const char help_o[]  ="Display power used in off mode";
 const char help_p[]  ="Store data to measure power in off mmodepower used in off mode; if the node was turned off with O";
 const char help_coulomb[]  ="Coulomb counter test mode";
 const char help_sd[]  ="SD card test mode";
 const char help_identify[]  ="Identify device by blinking LEDs";
 const char help_annotation[]  ="N,<number>: sets the current annotation";
-const char help_bootscript[]  ="b[,run;a boot;script] Prints the current bootscript or sets a new one; multiple commands are delimited by a ;";
+const char help_bootscript[]  ="b[,run;a boot;script] Prints the current bootscript or sets a new one\n\t\tmultiple commands are delimited by a ;";
 const char help_info[]  ="i,<ien> Prints battery and logging information when streaming/logging when ien=1";
 const char help_batterylong[] ="Long-term battery info";
 const char help_battery[] ="Short-term battery info";
@@ -89,12 +89,12 @@ const char help_usbreinit[] = "USB reinit";
 const char help_interrupts[] = "Interrupt tryouts";
 const char help_i2c[] = "I2C tests";
 //const char help_clear[] PROGMEM ="Lists timer callbacks";
-const char help_interface[]="Interface funcions (benchmark, swap, etc)";
+const char help_interface[]="Interface functions (benchmark, swap, etc)";
 const char help_benchmark[]="CPU and IO benchmarks";
 const char help_fat[]="fat test";
 const char help_sleep[] = "p[,<0|1>] Query sleep state or enable (1) or disable (0) sleep while waiting user input";
 const char help_cpureg[] = "Print CPU registers";
-const char help_audio[] = "Audio functions";
+const char help_audio[] = "Additional audio functions";
 
 const char help_1[]  ="Fcn 1";
 

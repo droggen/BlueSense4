@@ -93,7 +93,7 @@ const char mc_8002[]   = "  375Hz Quaternions";
 const char mc_8003[]   = "  225Hz Quaternions";
 const char mc_8004[]   = "  102Hz Quaternions";
 
-const char mc_9001[]   = "  102Hz Tait–Bryan/aerospace/zx'y\", intrinsic (yaw, pitch, roll)";
+const char mc_9001[]   = "  102Hz Tait-Bryan/aerospace/zx'y\", intrinsic (yaw, pitch, roll)";
 const char mc_9002[]   = "  102Hz Quaternions debug (angle, x,y,z)";
 
 

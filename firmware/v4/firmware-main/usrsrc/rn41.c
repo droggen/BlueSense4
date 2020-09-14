@@ -710,12 +710,12 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 		rn41_SetTempBaudrate(file,filebt,"230K");
 		serial_uart_changespeed(230400);
 	}
-	if(1)
+	if(0)
 	{	// Increase the baud rate
 		rn41_SetTempBaudrate(file,filebt,"460K");
 		serial_uart_changespeed(460800);
 	}
-	if(0)
+	if(1)
 	{	// Increase the baud rate
 		rn41_SetTempBaudrate(file,filebt,"921K");
 		serial_uart_changespeed(921600);
@@ -750,4 +750,5 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	fbufferwhendisconnected(filebt,0);
 
 }
+
 

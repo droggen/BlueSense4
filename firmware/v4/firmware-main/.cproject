@@ -209,7 +209,7 @@
 									<listOptionValue builtIn="false" value="DBG_RN41TERMINAL=1"/>
 									<listOptionValue builtIn="false" value="ENABLEMODECOULOMB=1"/>
 									<listOptionValue builtIn="false" value="ENABLEQUATERNION=1"/>
-									<listOptionValue builtIn="false" value="MSM_LOGBAT=1"/>
+									<listOptionValue builtIn="false" value="MSM_LOGBAT=0"/>
 									<listOptionValue builtIn="false" value="BUILD_RTC=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_EXTERNAL=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_INTERNAL=0"/>

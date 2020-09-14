@@ -884,7 +884,7 @@ unsigned long timer_waitperiod_ms(unsigned short p,WAITPERIOD *wp)
 	// If t is earlier than wp2 then the difference is larger than some large value maxrange/2=0x80000000
 	// if t is equal or later than wp2, then the difference is zero or a small number.
 	while( (t=timer_ms_get())-wp2>0x80000000 )
-		;
+		__NOP();
 		//_delay_us(10);		// Adding a us delay prevents triggering continuously interrupts
 	
 	// Store the next time into the user-provided pointer
@@ -943,16 +943,16 @@ unsigned long timer_waitperiod_ms(unsigned short p,WAITPERIOD *wp)
 	Returns:
 		Current time in us.
 ******************************************************************************/
-/*unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp)
+unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp)
 {
 	unsigned long t,wp2;
 	
 	// Current time
 	t = timer_us_get();
 	
-	// Benchmarks show ~30uS minimum delay at 11MHz.
-	// Return immediately for delays lower than 50uS, as the while loops to define the next period would be too slow
-	if(p<50)											
+	// AVR benchmarks: ~30uS minimum delay at 11MHz.
+	// ARM @ 30MHz: 10uS is OK.
+	if(p<20)
 		return t;
 	
 	// First call: initialise when is the next period
@@ -973,12 +973,14 @@ unsigned long timer_waitperiod_ms(unsigned short p,WAITPERIOD *wp)
 	// If t is earlier than wp2 then the difference is larger than some large value maxrange/2=0x80000000
 	// if t is equal or later than wp2, then the difference is zero or a small number.
 	while( (t=timer_us_get())-wp2>0x80000000 )
-		_delay_us(10);
+		__NOP();
+		//_delay_us(10);
+
 	
 	// Store the next time into the user-provided pointer
 	*wp=wp2;
 	return t;	
-}*/
+}
 
 /******************************************************************************
 	function: timer_waitperiod_us_test

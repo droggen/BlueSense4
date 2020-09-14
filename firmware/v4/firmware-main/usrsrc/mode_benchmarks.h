@@ -34,6 +34,7 @@ unsigned char CommandParserSerInfo(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkFlush(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkLatency(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkPerf(char *buffer,unsigned char size);
+unsigned char CommandParserBenchmarkTimer(char *buffer,unsigned char size);
 void benchmark_interface(FILE *fbench,FILE *finfo);
 
 #endif /* MODE_BENCHMARKS_H_ */

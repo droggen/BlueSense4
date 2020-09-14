@@ -282,7 +282,7 @@ toto1:
 	system_motionvcc_enable();
 
 	// Check MPU
-#if 0
+#if 1
 	fprintf(file_pri,"Checking MPU... ");
 	if(mpu_isok())
 		fprintf(file_pri,"Ok\n");

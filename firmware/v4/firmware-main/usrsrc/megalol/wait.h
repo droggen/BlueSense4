@@ -103,7 +103,7 @@ void timer_printcallbacks(FILE *f);
 
 
 unsigned long timer_waitperiod_ms(unsigned short p,WAITPERIOD *wp);
-//unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp);
+unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp);
 
 //void timer_waitperiod_test(void);
 //void timer_get_speedtest(void);

@@ -85,13 +85,11 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'T', CommandParserTime,help_t},
 	{'t', CommandParserDate,help_d},
 	{'Z',CommandParserSync,help_z},
+#if 0
 	{'R', CommandParserRTC,help_rtc},
 	{'r', CommandParserRTCExt,"External RTC functions"},
-
-	{0,0,"---- Power ----"},
-#if ENABLEMODECOULOMB==1
-	{'C', CommandParserCoulomb,help_coulomb},
 #endif
+	{0,0,"---- Power ----"},
 	{'Q', CommandParserBatteryInfoLong,help_batterylong},
 	{'q', CommandParserBatteryInfo,help_battery},
 	{'O', CommandParserOff,help_O},
@@ -106,47 +104,46 @@ const COMMANDPARSER CommandParsersIdle[] =
 	//{'z',CommandParserSyncFromRTC,help_zsyncfromrtc},
 	//{'Y',CommandParserTestSync,help_y},
 
-#if BUILD_BLUETOOTH==1
-#if DBG_RN41TERMINAL==1
-	{'B',CommandParserBT,help_r},
-#endif
-#endif
 	//{'L',CommandParserLCD,help_l},
 	
-#if DBG_TIMERELATEDTEST==1
-	{'t', CommandParserTime_Test,help_ttest},
-#endif
 	
-	{0,0,"---- Sensor ----"},
-	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging. No parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds. left_right: 0=left, 1=right, 2=stereo."},
+	{0,0,"---- Sound ----"},
+	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging.\n\t\tNo parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds.\n\t\tleft_right: 0=left, 1=right, 2=stereo."},
 	{'s', CommandParserAudio,help_audio},
-
+	{0,0,"---- ADC ----"},
 	{'A', CommandParserADC,help_a},
 	{'a', CommandParserADCTest,help_a_test},
+	{0,0,"---- Motion ----"},
 	{'M', CommandParserMotion,help_M},
 	{'m', CommandParserMPUTest,help_m},
-	{'n', CommandParserMPUTestN,help_m},
+	{0,0,"---- Multimodal ----"},
 	{'U', CommandParserSampleMultimodal,"U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]: Multimodal streaming/logging.\n\t\tadcmask and adcperiod are ignored if the mode does not include ADC.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
+	{0,0,"---- DAC ----"},
+	{'D', CommandParserModeDAC,"D[,sr,<frq0>,<vol0>[,<frq1>,<vol1>,...]]: DAC cosine waveform generation.\n\t\tsr: sample rate in Hz; vol: 0 to 4096; frqn: frequency in Hz\n\t\tNo parameters stops. Maximum sample rate is about 250KHz for 1 wavefom."},
+	{'d', CommandParserModeDACTest,"Additional DAC functions"},
+
+
+
 	//{'C', CommandParserClock,help_c},
 	//{'V', CommandParserDemo,help_demo},
 	//{'B', CommandParserBench,help_b},
 	//{'I', CommandParserIO,help_i},
-	{'I', CommandParserInterface,help_interface},
 
+	{0,0,"---- SD Card ----"},
+	{'I', CommandParserInterface,help_interface},
+	{'X', CommandParserSD,help_sd},
+	{0,0,"---- Various ----"},
+	{'F', CommandParserStreamFormat,help_f},
 	//{'G', CommandParserMotionRecog,help_g},
 	{'W', CommandParserSwap,help_w},
-
-	{'F', CommandParserStreamFormat,help_f},
-	{'i', CommandParserInfo,help_info},
-	{'D', CommandParserModeDAC,"D[,sr,<frq0>,<vol0>[,<frq1>,<vol1>,...]]: DAC cosine waveform generation. sr: sample rate in Hz; vol: 0 to 4096; frqn: frequency in Hz\n\t\tNo parameters stops. Maximum sample rate is about 250KHz for 1 wavefom."},
-	{'d', CommandParserModeDACTest,"DAC test"},
-	{'c', CommandParserCallback,help_callback},
-	{'X', CommandParserSD,help_sd},
 	//{'p', CommandParserPowerTest,help_powertest},
 	//{'S', CommandParserTeststream,help_s},
 	{'b', CommandParserBootScript,help_bootscript},
-	{'?', CommandParserIdentify,help_identify},
 	{'~', CommandParserClearBootCounter,help_clearbootctr},
+	{'?', CommandParserIdentify,help_identify},
+	{'K', CommandParserBenchmark,"Benchmarks"},
+
+#if 1		// Deactivated for the vidoe demo
 	//{'x', CommandParserx,help_x}
 	{'E',CommandParserEEPROM,help_eeprom},
 	{'u',CommandParserUSB,help_usbreinit},
@@ -164,12 +161,27 @@ const COMMANDPARSER CommandParsersIdle[] =
 	//{'§',CommandTestPwr,"test prw stuff"},
 
 
-	{'K', CommandParserBenchmark,"Benchmarks"},
+
 	{'-', CommandParserModeSerial,"Serial test mode"},
 	{',', CommandParserModeSerialReset,"Serial reset"},
 	{':', CommandParserDump,"Serial last"},
 	{'_', CommandParserSerInfo,"Serial info"},
 
+#if ENABLEMODECOULOMB==1
+	{'C', CommandParserCoulomb,help_coulomb},
+#endif
+#if BUILD_BLUETOOTH==1
+#if DBG_RN41TERMINAL==1
+	{'B',CommandParserBT,help_r},
+#endif
+#endif
+#if DBG_TIMERELATEDTEST==1
+	{'t', CommandParserTime_Test,help_ttest},
+#endif
+	{'n', CommandParserMPUTestN,help_m},
+	{'i', CommandParserInfo,help_info},
+	{'c', CommandParserCallback,help_callback},
+#endif
 
 };
 const unsigned char CommandParsersIdleNum=sizeof(CommandParsersIdle)/sizeof(COMMANDPARSER);
@@ -216,7 +228,7 @@ void mode_run(const char *identifier,const COMMANDPARSER *CommandParsers,unsigne
 		unsigned char rv = CommandProcess(CommandParsers,CommandParsersNum);
 		if(rv)
 		{
-			fprintf(file_pri,"Wakeup counter: %lu\n",ctr);
+			//fprintf(file_pri,"Wakeup counter: %lu\n",ctr);
 			ctr=0;
 		}
 		if(CommandShouldQuit())

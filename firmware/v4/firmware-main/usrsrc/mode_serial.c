@@ -18,6 +18,10 @@
 #include "rn41.h"
 #include "usart.h"
 #include "dma.h"
+#include "system.h"
+#include "helper.h"
+#include "ltc2942.h"
+#include "stm32l4xx.h"
 
 void usart_rx_check(void);
 
@@ -43,24 +47,10 @@ const COMMANDPARSER CommandParsersSerTest[] =
 	{'n', CommandParserSerTestDMAIsEn,"DMA is en"},
 	{'B', CommandParserSerTestWrite,"Write lots"},
 	{'b', CommandParserSerTestWrite2,"Write lots 2"},
-	{'m', CommandParserSerTestWrite3,"Write continuously by polling - stop when keypress"},
+	{'m', CommandParserSerTestWrite3,"m,<size>,<delay> Bluetooth debug write: write continuously by polling size bytes; then pause for delay; and write again. Stop on keypress."},
 	{'E',CommandParserIntfEvents,"Show UART event counters"},
 	{'C',CommandParserIntfEventsClear,"Clear UART event counters"},
-	/*{'I', CommandParserRTCExtInit, "Init external RTC with default settings"},
-	{'R',CommandParserRTCExtReadAllRegisters,"Read all registers"},
-	{'r', CommandParserRTCExtReadRegister,"r,<reg>: read register <reg>"},
-	{'w', CommandParserRTCExtWriteRegister,"w,<reg>,<val>: write <val> to register <reg>"},
-	{'Z', CommandParserRTCExtReadDateTime,"Read date and time"},
-	{'z', CommandParserRTCExtWriteDateTime,"z,<hh>,<mm>,<ss>,<dd>,<mm>,<yy>: sets the external RTC to hhmmss ddmmyy"},
-	{'X', CommandParserRTCExtSwRst,"X,<rst>: Software reset when rst=1; clear reset when rst=0"},
-	{'P', CommandParserRTCExtPollDateTime,"Poll date and time and SQW signal"},
-	{'a', CommandParserRTCExtWriteAlarm,"a,<hh>,<mm>,<ss>,<dd>,<mm>,<yy>: sets the external RTC alarm 1 to hhmmss ddmmyy"},
-	{'S', CommandParserRTCExtBgdReadStatus,"Read status register in background (interrupt driven)"},
-	{'T', CommandParserRTCExtTemp,"Read temperature"},
-	{0,0,"---- Development ----"},
-
-	{'1', CommandParserRTCExtTest1,"test 1"},
-	{'2', CommandParserRTCExtTest2,"test 2"},*/
+	{'r',CommandParserSerReg,"USART registers"},
 
 };
 const unsigned char CommandParsersSerTestNum=sizeof(CommandParsersSerTest)/sizeof(COMMANDPARSER);
@@ -269,12 +259,12 @@ unsigned char CommandParserSerTestDMATx(char *buffer,unsigned char size)
 
 	LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_7);
 
-	for(int i=0;i<DMATXLEN;i++)
+	for(int i=0;i<SERIAL_UART_DMA_TX_BUFFERSIZE;i++)
 		_serial_uart_tx_dma_buffer[i]='0'+i;
 
 
 	// Configure DMA
-	LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, DMATXLEN);
+	LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, SERIAL_UART_DMA_TX_BUFFERSIZE);
 	LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_7, (uint32_t)_serial_uart_tx_dma_buffer);
 
 	// Clear all flags
@@ -297,12 +287,12 @@ unsigned char CommandParserSerTestDMATx2(char *buffer,unsigned char size)
 
 	//LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_7);
 
-	for(int i=0;i<DMATXLEN;i++)
+	for(int i=0;i<SERIAL_UART_DMA_TX_BUFFERSIZE;i++)
 		_serial_uart_tx_dma_buffer[i]='0'+i;
 
 
 	// Configure DMA
-	LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, DMATXLEN);
+	LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_7, SERIAL_UART_DMA_TX_BUFFERSIZE);
 	LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_7, (uint32_t)_serial_uart_tx_dma_buffer);
 
 	// Clear all flags
@@ -377,45 +367,205 @@ unsigned char CommandParserSerTestWrite2(char *buffer,unsigned char size)
 
 	return 0;
 }
+unsigned char CommandParserSerReg(char *buffer,unsigned char size)
+{
+	fprintf(file_usb,"USART CR1: %08X\n",USART2->CR1);
+	fprintf(file_usb,"USART CR2: %08X\n",USART2->CR2);
+	fprintf(file_usb,"USART CR3: %08X\n",USART2->CR3);
+	fprintf(file_usb,"USART ISR: %08X\n",USART2->ISR);
+	return 0;
+}
+
+
 unsigned char CommandParserSerTestWrite3(char *buffer,unsigned char size)
 {
-	fprintf(file_pri,"Writing until keypress on USB\n");
+	// Check the packet size and delay
+
+	int bufsiz,delay;
+
+	if(ParseCommaGetInt(buffer,2,&bufsiz,&delay))
+		return 2;
+	if(bufsiz<1)
+		return 2;
+	if(delay<0 || delay>10000)
+		return 2;
+
+	WAITPERIOD wp=0;
+
+#if 0
+	unsigned t1 = timer_ms_get();
+	for(int i=0;i<100;i++)
+	{
+		//timer_waitperiod_ms(delay,&wp);
+		timer_us_wait(6000);
+		//unsigned long t = timer_waitperiod_us(delay,&wp);
+		//rintf(file_usb,"%u\n",t);
+	}
+	unsigned t2 = timer_ms_get();
+	fprintf(file_pri,"dt: %u\n",t2-t1);
+#endif
+
+
+
+#if 1
+
+	fprintf(file_pri,"Writing to UART until keypress on USB\n");
+	fprintf(file_pri,"Packets (written as quickly as possible): %d followed by %d us pause\n",bufsiz,delay);
 
 	// Works only in non-dma mode
+
+	fprintf(file_usb,"Deactivate interface change detect\n");
+	interface_changedetectenable(0);
+
 
 	// Deactivate interrupts
 	LL_USART_DisableIT_TXE(USART2);			// No TX DMA -> enable TXE interrupt
 	//LL_USART_EnableIT_CTS(USART2);
 	LL_USART_DisableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
 
+	fprintf(file_usb,"USART CR3: %08X\n",USART2->CR3);
 
+	// CTS to input push-pull
+	// No need to configure as INPUT; can read pin state also in alternate function with LL_USART_HWCONTROL_NONE
+	/*LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+	GPIO_InitStruct.Pin = LL_GPIO_PIN_0;
+	GPIO_InitStruct.Mode = LL_GPIO_MODE_INPUT;
+	GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+	GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+	ErrorStatus e = LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+	fprintf(file_usb,"Init of CTS as input: %d\n",e);*/
+
+	// Wait for BT connection
+	fprintf(file_usb,"Waiting for BT connection\n");
+
+	while(!system_isbtconnected())
+	{
+		if(fgetc(file_usb)!=-1)
+		{
+			fprintf(file_usb,"Interrupted\n");
+			goto CommandParserSerTestWrite3_end;
+		}
+	}
+
+	fprintf(file_usb,"BT Connected\n");
+
+	HAL_Delay(100);
+
+	serial_uart_clearevents();
+	fprintf(file_usb,"UART events cleared\n");
+
+
+	unsigned nit=0;
+	unsigned ts1 = timer_ms_get();
+	unsigned tsctr = 0;
 	unsigned t1,t2,n=0;
+	unsigned char cts,cts_last;
+	unsigned infointerval=1000;
+	unsigned ctsblock=0,ctschange=0;
+	unsigned maxdur = 10000;
+
+	cts = cts_last = _serial_usart_cts();
+	fprintf(file_usb,"CTS: %d\n",cts);
+
 	t1 = timer_ms_get();
 	while(1)
 	{
-		if(fischar(file_usb))
+		if(fischar(file_usb) || !system_isbtconnected())		// If keypress or disconnection -> interrupt
 			break;
 
-		//fprintf(file_usb,"a\n");
-		//HAL_Delay(100);
+		unsigned t = timer_ms_get();
+		if(t-t1>maxdur)
+		{
+			fprintf(file_usb,"Interrupting after maximum duration\n");
+			break;
+		}
 
-		// Check CTS
-//		HAL_GPIO_ReadPin(
+		if(t>ts1+infointerval)
+		{
+			// infointerval-ms periodic info
+			ts1+=infointerval;
+			fprintf(file_usb,"%u\n",tsctr++);
 
+			// Get power consumption
+			fprintf(file_pri,"#%s\n",ltc2942_last_strstatus());
+			for(unsigned char i=0;i<LTC2942NUMLASTMW;i++)
+				fprintf(file_usb,"%d ",ltc2942_last_mWs(i));
+			fprintf(file_usb,"\n");
+		}
 
 		// Write to BT
 		// Transmit
-		serial_usart_putchar_block(USART2,'@');
-		n++;
+		for(int i=0;i<bufsiz;i++)
+		{
+			cts = _serial_usart_cts();
+			if(cts!=cts_last)
+			{
+				ctschange++;
+				//fprintf(file_usb,"CTS: %d\n",cts);
+				cts_last = cts;
+			}
+
+			// Check what is the CTS status - if CTS forbids us from sending, then wait
+			if(0)	// Enable manual CTS check
+			{
+				if(cts==0)
+				{
+					ctsblock++;
+					while( _serial_usart_cts() == 0 && !fischar(file_usb))
+					{
+						// Wait
+					}
+					//fprintf(file_usb,"*\n");
+				}
+			}
+
+			//serial_usart_putchar_block(USART2,'@');
+			if((n&1)==0)
+			{
+				serial_usart_putchar_block(USART2,'0'+(n&0xf));
+			}
+			else
+			{
+				serial_usart_putchar_block(USART2,'\n');
+			}
+			n++;
+		}
+		timer_us_wait(delay);
+		nit++;
 
 	}
 	t2 = timer_ms_get();
 
+	HAL_Delay(1000);
+
+	fprintf(file_usb,"Interrupted\n");
+	fprintf(file_usb,"Number of iterations: %u\n",nit);
+
+	fprintf(file_usb,"Bytes: %d. Time: %d ms\n",n,t2-t1);
+	fprintf(file_usb,"Throughput: %u KB/s\n",n*1000/1024/(t2-t1));
+
+	fprintf(file_usb,"CTS changes: %u. CTS wait: %u\n",ctschange,ctsblock);
+
+	fprintf(file_usb,"UART events\n");
+	serial_uart_printevents(file_usb);
+
+
+	HAL_Delay(1000);
+
+
+CommandParserSerTestWrite3_end:
 	LL_USART_EnableIT_TXE(USART2);			// No TX DMA -> enable TXE interrupt
 	//LL_USART_EnableIT_CTS(USART2);
 	LL_USART_EnableIT_RXNE(USART2);			// No RX DMA -> enable RX interrupt
 
-	fprintf(file_usb,"%d bytes. %d ms\n",n,t2-t1);
 
+
+	fprintf(file_usb,"Activate interface change detect\n");
+	fprintf(file_usb,"This is USB\n");
+	fprintf(file_bt,"This is BT\n");
+
+	interface_changedetectenable(1);
+#endif
 	return 0;
 }
+

@@ -124,8 +124,8 @@ FILE *serial_open_usb()
 	FILE *f = fopencookie((void*)&SERIALPARAM_USB,"w+",iof);
 	// Line buffering speeds up writes by calling cookie_write with up to a buffer-length large payload.
 	// However, it
-	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
-	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+	setvbuf (f, 0, _IONBF, 0 );	// No buffering
+	//setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
 	//serial_associate(f,&SERIALPARAM_USB);			// Use big hack with f->_cookie below
 
