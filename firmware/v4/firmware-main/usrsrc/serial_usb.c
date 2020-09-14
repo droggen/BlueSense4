@@ -26,17 +26,32 @@
 
 	There are two possibilities to send data from the circular bfufer to usb:
 	1 Call at regular interval the CDC_TryTransmit_FS
-	2 Call CDC_TryTransmit_FS whenever a cookie_write or putbuf is called; and also on a Transfer complete (to handle additional data put in circular buffer in the meantime).
-	By default this uses implementations 2: part (2) allows higher throughput.
+	2 Call CDC_TryTransmit_FS whenever a cookie_write or putbuf is called
+	3 Call CDC_TryTransmit_FS whenever a cookie_write or putbuf is called and also on a Transfer complete (to handle additional data put in circular buffer in the meantime).
+
+	This implementation uses (3).
 
 	The transmit implementation is non-blocking by default. This means that if the TX circular buffer is full then data is lost.
 	This is required so that text printed but not read from the host (e.g. when USB disconnected and buffering when disconnected) does not block
 	the operation of the node.
 	This requires a large enough transmit buffer (USB_BUFFERSIZE) to hold all the data which may be rapidly printed (e.g. the help screen).
 
-
 	A blocking write option is implemented in cookie_write for benchmarking purposes. If stdio functions are used in interrupts and the writes are blocking
 	then the firmware hangs. Avoid blocking write unless used for benchmarking.
+
+	The following defines usbd_cdc_if.c:
+		#define APP_RX_DATA_SIZE  512
+		#define APP_TX_DATA_SIZE  512
+	impact the throughput.
+	Setting APP_TX_DATA_SIZE to 2048 (default) leads to timer interrupts being lost due to USB interrupts overtaking the others.
+
+	Transmit benchmark at 32MHZ (16MHz bus) with fputbuf:
+		256: 435KB/s	(ok)
+		512: 465KB/s	(ok)
+		1024: 482 KB/s 	(ok)
+		2048: 483 KB/s	(interrupts lost)
+
+	A value of 512 is selected as a tradeoff.
 
 
 
@@ -91,18 +106,17 @@ void trytxbletooth()
 /*
 	The rationale for _serial_usb_trigger_background_tx is to trigger background fflush to empty the stdio buffer.
 	However, fflush does not appear thread-safe with the other stdio functions. Therefore, this should not be used.
+
+	Alternatively: instead of retriggering a transfer on the callback interrupt, use a timer to initiate the transfers
 */
 unsigned char _serial_usb_trigger_background_tx(unsigned char p)
 {
 	(void)p;
 
-	struct _reent r;
+	// If the buffer is not empty, initiate a transfer at a low data rate. Transfers are also initiated
 
-	//fflush(file_usb);
-	//fflush_unlocked(file_usb);
-	//_fflush_r(&r,file_usb);
-	//if(buffer_level(&SERIALPARAM_USB.txbuf))
-		//CDC_TryTransmit_FS();
+	if(buffer_level(&SERIALPARAM_USB.txbuf))
+		CDC_TryTransmit_FS();
 
 	return 0;
 }
@@ -122,38 +136,19 @@ FILE *serial_open_usb()
 	iof.close = 0;
 	iof.seek = 0;
 	FILE *f = fopencookie((void*)&SERIALPARAM_USB,"w+",iof);
-	// Line buffering speeds up writes by calling cookie_write with up to a buffer-length large payload.
-	// However, it
-	setvbuf (f, 0, _IONBF, 0 );	// No buffering
-	//setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
-	//serial_associate(f,&SERIALPARAM_USB);			// Use big hack with f->_cookie below
+	// Line buffering speeds up writes by calling cookie_write with up to a buffer-length large payload.
+	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
+	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
 	f->_cookie = &SERIALPARAM_USB;
 
-	/*fprintf(f,"cookie: %p\n",&SERIALPARAM_USB);
-	fprintf(f,"file: %d\n",f->_file);
-	fprintf(f,"cookie_io_function: %p %p %p\n",&iof,iof.read,iof.write);
-	fprintf(f,"cookie in file: %p (offset: %d)\n",f->_cookie,(void*)&(f->_cookie)-(void*)f);
-	fprintf(f,"_read in file: %p (%p)\n",*f->_read,&serial_usb_cookie_read);
-	fprintf(f,"_write in file: %p (%p)\n",f->_write,&serial_usb_cookie_write);
-	fprintf(f,"_close in file: %p (%p)\n",f->_close,0);
-	fprintf(f,"_seek in file: %p (%p)\n",f->_seek,0);
-	fprintf(f,"sizeof file: %d\n",sizeof(FILE));
-	char *ptr = (char*)f;
-	for(int i=0;i<sizeof(FILE);i++)
-	{
-		fprintf(f,"%02X ",ptr[i]);
-	}
-	fprintf(f,"\n");
 
-	fprintf(f,"Find from file %p, serialparam: %p\n",f,serial_findserialparamfromfile(f));*/
+	// Register USB write callback at low rate to initiate transfer if buffer not empty
+	//timer_register_callback(_serial_usb_trigger_background_tx,19);		// 1000Hz/10 = 50Hz
 
-	// [Register USB write callback at low rate to flush stdio and write data]: Do not use - not thread safe
-	//timer_register_callback(_serial_usb_trigger_background_tx,9);		// 1000Hz/10 = 100Hz
-	//timer_register_callback(_serial_usb_trigger_background_tx,199);		// 1000Hz/200 = 5Hz (200ms latency)
-	//timer_register_callback(serial_usb_txcallback,3999);		// 1000Hz/2000 = 0.5Hz
 
 
 	return f;
@@ -309,7 +304,7 @@ unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 		{
 			if(data[i]==13 || data[i]==10)
 				isnewline=1;
-			buffer_put(&SERIALPARAM_USB.txbuf,data[i]);
+			_buffer_put(&SERIALPARAM_USB.txbuf,data[i]);		// Use unprotected version of buffer_put as already in atomic block
 		}
 	}
 

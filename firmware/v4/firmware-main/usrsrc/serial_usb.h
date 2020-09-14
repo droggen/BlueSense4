@@ -11,7 +11,6 @@
 #include "serial.h"
 
 #define USB_BUFFERSIZE 2048
-//#define USB_BUFFERSIZE 8192
 //#define USB_BUFFERSIZE 512
 
 extern SERIALPARAM SERIALPARAM_USB;

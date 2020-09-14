@@ -245,13 +245,12 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	serial_setblockingwrite(file_usb,1);
 	serial_setblockingwrite(file_bt,1);
 
-	// Benchmark fwrite, fputs, fputc
+	// Benchmark
 
 
 	unsigned int nwritten;
 
 
-	// fprintf
 
 	fprintf(finfo,"Benchmarking fprintf for %u seconds.\n",benchtime);
 
@@ -260,6 +259,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
+		s[0] = '0' + (nit&0xf);
 		fprintf(fbench,"%s",s);
 		//fprintf(file_pri,"%d\n",nw);
 		//if(nw>0)
@@ -286,6 +286,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
+		s[0] = '0' + (nit&0xf);
 		int nw = fwrite(s,1,payloadsize,fbench);				// payload elements of size 1
 		nwritten+=nw;										// Number of elements successfully written
 		nit++;
@@ -309,6 +310,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
+		s[0] = '0' + (nit&0xf);
 		int nw = fputs(s,fbench);
 		if(nw>=0)
 		nwritten+=payloadsize;								// Number of elements successfully written
@@ -334,6 +336,7 @@ void benchmark_interface(FILE *fbench,FILE *finfo)
 	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
+		s[0] = '0' + (nit&0xf);
 		if(fputbuf(fbench,s,payloadsize)==0)
 			nwritten += payloadsize;		// Success
 		nit++;
@@ -508,6 +511,7 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 			t1 = timer_ms_get();
 			do
 			{
+				buf[0]='0'+(it&0xf);			// Counter in 1st byte
 				if(fputs(buf,fi)>=0)
 					wr++;
 				it++;
@@ -523,6 +527,7 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 			t1 = timer_ms_get();
 			do
 			{
+				buf[0]='0'+(it&0xf);			// Counter in 1st byte
 				if(fputbuf(fi,buf,n)==0)
 					wr++;
 				it++;
@@ -553,7 +558,7 @@ unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size)
 	fprintf(file_pri,"Speed: %u KB/s\n",wr*n*1000/1024/dt);
 	// Account for the TX buffer size, which likely isn't empty
 	fprintf(file_pri,"Accounting for TX buffer size (%d) wrote: %d\n",txbufsize,wr*n-txbufsize);
-	fprintf(file_pri,"Speed: %u KB/s\n",(wr*n-txbufsize)*1000/1024/dt);
+	fprintf(file_pri,"Speed: %u KB/s\n",(wr*n-txbufsize)*125/128/dt);
 
 
 
