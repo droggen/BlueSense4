@@ -94,17 +94,23 @@ unsigned int _stm_dfsdm_rightshift;												// Number of bits to right shift 
 DFSDM_Filter_HandleTypeDef *_stm_dfsdm_filters[2] = {&hdfsdm1_filter0,&hdfsdm1_filter1};
 DFSDM_Channel_HandleTypeDef *_stm_dfsdm_channels[2] = {&hdfsdm1_channel5,&hdfsdm1_channel6};
 
-const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
+const char *_stm_dfsdm_modes_20MHz[STM_DFSMD_INIT_MAXMODES+1]   =
 {
 	// Off
     "Sound off",
 	"8 KHz (8003Hz)",
 	"16 KHz (16181Hz)",
 	"20 KHz (20080Hz)",
-	//"24 KHz (poor quality; overrun in stereo)",
-	/*"32 KHz",
-	"48 KHz",*/
 };
+const char *_stm_dfsdm_modes_16MHz[STM_DFSMD_INIT_MAXMODES+1]   =
+{
+	// Off
+    "Sound off",
+	"8 KHz (8008Hz)",
+	"16 KHz (15920Hz)",
+	"20 KHz (19875Hz)",
+};
+#define _stm_dfsdm_modes _stm_dfsdm_modes_16MHz
 
 /******************************************************************************
 	_stm_dfsdm_modes_param
@@ -112,13 +118,13 @@ const char *_stm_dfsdm_modes[STM_DFSMD_INIT_MAXMODES+1]   =
 	Parameters to set-up the audio acquisition at pre-defined frequencies.
 	Each entry comprises the following parameters in this order: order fosr iosr div shift
 ******************************************************************************/
-const unsigned char _stm_dfsdm_modes_param[STM_DFSMD_INIT_MAXMODES+1][5] = {
+const unsigned char _stm_dfsdm_modes_param_20MHz[STM_DFSMD_INIT_MAXMODES+1][5] = {
 		// These parameters assume an audio clock of 20MHz.
 
 		// OFF - the parameters are irrelevant for this mode
 		{0,     0,     0,     0,     0},
-		// 8KHz
 
+		// 8KHz
 		{4,     88,    1,     7,     11},			// 8003Hz. Clipping rightshift: 10. Ok rightshift 11
 		//{3,82,1,10,3},							// Alternative settings with non-overclocked microphone, poorer quality
 
@@ -126,10 +132,29 @@ const unsigned char _stm_dfsdm_modes_param[STM_DFSMD_INIT_MAXMODES+1][5] = {
 		{5,     40,    1,     6,     10},			// 16181 Hz. Clipping with rightshift: 7, 8, 9. Ok with rightshift: 10
 
 		// 20KHz
-		//stm_dfsdm_initsampling(left_right,5,32,1,6);
 		{5,     32,    1,     6,     8},			// 20080 Hz with clock at 3.33MHz. Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
 
 };
+const unsigned char _stm_dfsdm_modes_param_16MHz[STM_DFSMD_INIT_MAXMODES+1][5] = {
+		// These parameters assume an audio clock of 16MHz.
+
+		// OFF - the parameters are irrelevant for this mode
+		{0,     0,     0,     0,     0},
+
+		// 8KHz
+		{4,     82,    1,     6,     8},			// 8008Hz. Clipping rightshift: 8 (with 11: -3500-+3500)
+
+		// 16KHz
+		{5,     39,    1,     5,     9},			// 15920 Hz. Clipping rightshift: 9 (with 10: -11000-+11000)
+
+		// 20KHz
+		{5,     31,    1,     5,     8},			// 19875 Hz. Clipping rightshift: 8 (with 8: -9000-+13000)
+
+};
+// Select the parameters
+//#define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_20MHz
+#define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_16MHz
+
 
 /******************************************************************************
 	function: stm_dfsdm_init
@@ -1650,7 +1675,7 @@ void _stm_dfsdm_sampling_sync()
 	// Global enable: DFSDMEN=1 in the DFSDM_CH0CFGR1
 	// Tentative procedure: global channel disable; clear dfen; restore dfen; global enable
 
-	unsigned r,gr;
+	unsigned gr;
 	unsigned c0,c1;
 
 	// Understand which filters are running: if running ISR has RCIP (0x4000) set.
