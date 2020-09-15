@@ -338,37 +338,7 @@ void __mpu_addnewdata(unsigned char *spibuf,unsigned long acqtime)
 
 	mdata->time=acqtime;
 
-	//__mpu_copy_spibuf_to_mpumotiondata_asm(spibuf+1,mdata);			// Copy and conver the spi buffer to MPUMOTIONDATA; if this function is used, the correction must be manually done as below.
-	//__mpu_copy_spibuf_to_mpumotiondata_magcor_asm(spibuf+1,mdata);		// Copy and conver the spi buffer to MPUMOTIONDATA including changing the magnetic coordinate system (mx <= -my; my<= -mx) (Dan's version)
-	// TOFIX: ARM __mpu_copy_spibuf_to_mpumotiondata_magcor_asm_mathias
-	__mpu_copy_spibuf_to_mpumotiondata_magcor_c_mathias(spibuf+1,mdata);
-	//__mpu_copy_spibuf_to_mpumotiondata_magcor_asm_mathias(spibuf+1,mdata);		// Copy and conver the spi buffer to MPUMOTIONDATA including changing the magnetic coordinate system (mx <= my; my<= mx; mz<=-mz) (Mathias's version)
-
-
-	// TOFIX: __mpu_copy_spibuf_to_mpumotiondata_magcor_asm_mathias in C - what does this do??
-
-
-	// Alternative to __mpu_copy_spibuf_to_mpumotiondata_magcor_asm: manual change
-	/*signed t = mdata->mx;
-	mdata->mx=-mdata->my;
-	mdata->my=-t;*/
-
-
-	// Mathias - changes where is the yaw=0 by 180 (not needed if __mpu_copy_spibuf_to_mpumotiondata_magcor_asm_mathias is used)
-	/*signed t = mdata->mx;
-	mdata->mx=mdata->my;
-	mdata->my=t;
-	mdata->mz=-mdata->mz;*/
-
-	//mdata->mz=0;
-
-	/*mdata->gx=0;
-	mdata->gy=0;
-	mdata->gz=0;*/
-
-	//mdata->mx=0;
-	//mdata->my=0;
-	//mdata->mz=0;
+	__mpu_copy_spibuf_to_mpumotiondata_magcor_c_mathias(spibuf+1,mdata);			// Copy and correct the magnetic field axes to match the accelerometer and gyroscope.
 
 
 
@@ -379,12 +349,12 @@ void __mpu_addnewdata(unsigned char *spibuf,unsigned long acqtime)
 
 	mdata->packetctr=__mpu_data_packetctr_current;
 
-	// correct the magnetometer
+	// Correct the magnetometer
 	//if(_mpu_mag_correctionmode==1)
 		//mpu_mag_correct1(mdata->mx,mdata->my,mdata->mz,&mdata->mx,&mdata->my,&mdata->mz);		// This call to be used with __mpu_copy_spibuf_to_mpumotiondata_asm
 		//mpu_mag_correct1(mdata->my,mdata->mx,mdata->mz,&mdata->my,&mdata->mx,&mdata->mz);		// This call to be used with __mpu_copy_spibuf_to_mpumotiondata_magcor_asm: swap mx and my to ensure the right ASA coefficients are applied. This was the last active code. Not used with ICM
 	if(_mpu_mag_correctionmode==2)
-		mpu_mag_correct2_inplace(&mdata->mx,&mdata->my,&mdata->mz);								// Call identical regardless of __mpu_copy_spibuf_to_mpumotiondata_asm or __mpu_copy_spibuf_to_mpumotiondata_magcor_asm as calibration routine uses corrected coordinate system.
+		mpu_mag_correct2_inplace(&mdata->mx,&mdata->my,&mdata->mz);								//
 
 
 	// Implement the channel kill
@@ -452,10 +422,16 @@ void __mpu_copy_spibuf_to_mpumotiondata_magcor_c_mathias(unsigned char *spibuf,M
 	mpumotiondata->gz=(((short)spibuf[10])<<8)|spibuf[11];
 	// Temp (big endian)
 	mpumotiondata->temp=(((short)spibuf[12])<<8)|spibuf[13];
+
 	// Magnetic (little endian)
-	mpumotiondata->my=(((short)spibuf[15])<<8)|spibuf[14];
-	mpumotiondata->mx=(((short)spibuf[17])<<8)|spibuf[16];
-	mpumotiondata->mz=-( (((short)spibuf[19])<<8)|spibuf[18] );
+	unsigned short mx,my,mz;
+	mx = (((short)spibuf[15])<<8)|spibuf[14];
+	my = (((short)spibuf[17])<<8)|spibuf[16];
+	mz = (((short)spibuf[19])<<8)|spibuf[18];
+	// Change the coordinate system of magnetometer to be identical to acc and gyro
+	mpumotiondata->mx=mx;				// X acc is same as X magn
+	mpumotiondata->my=-my;				// Y acc is opposite to Y magn
+	mpumotiondata->mz=-mz;				// Z acc is oppostite to Z magn
 	mpumotiondata->ms=(spibuf[21]>>3)&1;
 
 }
