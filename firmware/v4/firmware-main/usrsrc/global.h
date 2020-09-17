@@ -18,6 +18,7 @@ extern unsigned char sharedbuffer[];
 extern unsigned char system_mode;
 
 extern unsigned char __mode_sleep;
+extern unsigned char __mode_vt100;
 
 #define CONFIG_ADDR_ENABLE_ID 0
 #define CONFIG_ADDR_ENABLE_TIMESTAMP 1
@@ -56,6 +57,9 @@ extern unsigned char __mode_sleep;
 #define STATUS_ADDR_NUMBOOT1	301
 #define STATUS_ADDR_NUMBOOT2	302
 #define STATUS_ADDR_NUMBOOT3	303
+
+// Global terminal settings
+#define CONFIG_ADDR_VT100		400
 
 // Storing charge status upon soft or hard off
 // Address is aligned on a page (32 bytes) to allow contiguous writes)

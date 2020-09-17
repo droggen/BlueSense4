@@ -199,6 +199,26 @@ void ConfigSaveScript(char *buf,unsigned char n)
 	}
 }
 
+/******************************************************************************
+	function: ConfigLoadVT100
+******************************************************************************/
+unsigned char ConfigLoadVT100()
+{
+	return eeprom_read_byte(CONFIG_ADDR_VT100,1,0)?1:0;
+}
+
+/******************************************************************************
+	function: ConfigSaveVT100
+******************************************************************************/
+void ConfigSaveVT100(unsigned char en)
+{
+	eeprom_write_byte(CONFIG_ADDR_VT100,en);
+}
+
+
+
+
+
 
 
 

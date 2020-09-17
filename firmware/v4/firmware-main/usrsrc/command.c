@@ -30,9 +30,69 @@ unsigned char CommandBufferPtr=0;				// Index into CommandBuffer
 const char CommandSuccess[] = "CMDOK\n";
 const char CommandInvalid[] = "CMDINV\n";
 const char CommandError[] = "CMDERR\n";
+const char CommandVT100HighlightOk[] = "\x1b[32m";
+const char CommandVT100HighlightErr[] = "\x1b[31m";
+const char CommandVT100Normal[] = "\x1b[0m";
 
 const COMMANDPARSER *CommandParsersCurrent;
 unsigned char CommandParsersCurrentNum;
+
+/******************************************************************************
+	function: CommandProcessVT100Highlight
+*******************************************************************************
+	Parameters:
+		mode		-		0=normal; 1=ok; 2=error
+******************************************************************************/
+void CommandProcessVT100Highlight(unsigned char mode)
+{
+	if(__mode_vt100)
+	{
+		switch(mode)
+		{
+		case 0:
+			fputs(CommandVT100Normal,file_pri);
+			break;
+		case 1:
+			fputs(CommandVT100HighlightOk,file_pri);
+			break;
+		default:
+			fputs(CommandVT100HighlightErr,file_pri);
+		}
+	}
+}
+
+/******************************************************************************
+	function: CommandProcessOK
+*******************************************************************************
+******************************************************************************/
+void CommandProcessOK()
+{
+	CommandProcessVT100Highlight(1);
+	fputs(CommandSuccess,file_pri);
+	CommandProcessVT100Highlight(0);
+}
+/******************************************************************************
+	function: CommandProcessInvalid
+*******************************************************************************
+******************************************************************************/
+void CommandProcessInvalid()
+{
+	CommandProcessVT100Highlight(2);
+	fputs(CommandInvalid,file_pri);
+	CommandProcessVT100Highlight(0);
+}
+
+/******************************************************************************
+	function: CommandProcessError
+*******************************************************************************
+******************************************************************************/
+void CommandProcessError()
+{
+	CommandProcessVT100Highlight(2);
+	fputs(CommandError,file_pri);
+	CommandProcessVT100Highlight(0);
+}
+
 
 
 /******************************************************************************
@@ -61,18 +121,16 @@ unsigned char CommandProcess(const COMMANDPARSER *CommandParsers,unsigned char C
 	}
 	if(rv==3)
 	{
-		fputs(CommandInvalid,file_pri);
-		//fputs_P(CommandInvalid,file_dbg);
+		CommandProcessInvalid();
 		return 1;
 	}
 	if(rv==1)
 	{
-		fputs(CommandSuccess,file_pri);
-		//fputs_P(CommandSuccess,file_dbg);
+		CommandProcessOK();
 		return 1;
 	}
-	fputs(CommandError,file_pri);
-	//fputs_P(CommandError,file_dbg);	
+	CommandProcessError();
+
 	return 1;
 }
 

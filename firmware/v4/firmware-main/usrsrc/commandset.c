@@ -1169,3 +1169,26 @@ unsigned char CommandParserRandomWalk(char *buffer,unsigned char size)
 
 	return 0;
 }*/
+unsigned char CommandParserVT100(char *buffer,unsigned char size)
+{
+	if(ParseCommaGetNumParam(buffer)!=0)
+	{
+		unsigned en;
+		if(ParseCommaGetUnsigned(buffer,1,&en))
+			return 2;
+		if(en>1)
+			return 2;
+
+		__mode_vt100=en;
+		ConfigSaveVT100(__mode_vt100);
+	}
+
+	// Prints the current VT100 mode.
+	fprintf(file_pri,"VT 100 mode: %s\n",__mode_vt100?"ON":"OFF");
+	return 0;
+
+}
+
+
+
+

@@ -39,6 +39,7 @@ void ConfigSaveMotionAccScale(unsigned char scale);
 void ConfigSaveMotionGyroScale(unsigned char scale);
 void ConfigLoadScript(char *buf);
 void ConfigSaveScript(char *buf,unsigned char n);
-
+unsigned char ConfigLoadVT100();
+void ConfigSaveVT100(unsigned char en);
 
 #endif

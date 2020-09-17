@@ -54,13 +54,28 @@
 	A value of 512 is selected as a tradeoff.
 
 
-
 	Bug in the ST LL driver: modify stm32l4xx_ll_usb.c with the line
-	else if ((hclk >= 27700000U) && (hclk <= 32000000U)) // Dan: fix bug in ST driver
+			else if ((hclk >= 27700000U) && (hclk <= 32000000U)) // Dan: fix bug in ST driver
 	to avoid USB hanging when the HCLK is exactly 32MHz. This is an occasional hanging
 	with high transfer rate. See:
 	https://community.st.com/s/question/0D50X00009XkaCXSAZ/otg-documentation-cube-otghsgusbcfgtrdt-values
 
+	Bug in the ST USB virtual com port related to the line encoding: modify in USB_DEVICE\App\usbd_cdc_if.c the function CDC_Control_FS with:
+
+		.....
+		// Dan: required for Qt on Windows
+		static uint8_t lineCoding[7] // 115200bps, 1stop, no parity, 8bit
+			= { 0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08 };
+		case CDC_SET_LINE_CODING:
+			memcpy(lineCoding, pbuf, sizeof(lineCoding));
+		break;
+
+		case CDC_GET_LINE_CODING:
+			memcpy(pbuf, lineCoding, sizeof(lineCoding));
+		break;
+
+		case CDC_SET_CONTROL_LINE_STATE:
+		.....
 
 
 

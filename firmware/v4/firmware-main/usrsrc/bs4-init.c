@@ -139,6 +139,9 @@ void bs4_init_extended()
 	fprintf(file_pri,"Boot %lu\n",numboot);
 	eeprom_write_dword(STATUS_ADDR_NUMBOOT0,numboot+1);
 
+	// Get the VT100 mode
+	__mode_vt100=ConfigLoadVT100();
+
 #if 0 // Legacy
 #if ENABLE_RTC_INTERNAL==1
 	// Init internal RTC

@@ -85,7 +85,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'T', CommandParserTime,help_t},
 	{'t', CommandParserDate,help_d},
 	{'Z',CommandParserSync,help_z},
-#if 0
+#if 1
 	{'R', CommandParserRTC,help_rtc},
 	{'r', CommandParserRTCExt,"External RTC functions"},
 #endif
@@ -155,10 +155,11 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'G',CommandParserCPUReg,help_cpureg},
 
 	{'w',CommandParserWait,"w,<delay> waits for the specified delay in ms"},
-	{'9',CommandParserRamp,"9,<delay>,<from>,<lowerthan>,<step> Generates a ramp signal every delay ms starting at from by increment of step."},
-	{'8',CommandParserRandomWalk,"8,<delay>,<from>,<to>,<jump> Generates a random walk between from and to, jumping by up to jump every delay ms."},
+	{'9',CommandParserRamp,"9,<delay>,<from>,<lowerthan>,<step> Generates a ramp signal every delay ms starting at from by increment of step"},
+	{'8',CommandParserRandomWalk,"8,<delay>,<from>,<to>,<jump> Generates a random walk between from and to, jumping by up to jump every delay ms"},
 
 	//{'§',CommandTestPwr,"test prw stuff"},
+	{'V',CommandParserVT100,"V[,<en>] Queries the VT100 mode; or enables (en=1) or disables (en=0) it"},
 
 
 

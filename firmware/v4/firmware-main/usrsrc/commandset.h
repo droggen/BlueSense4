@@ -107,6 +107,7 @@ unsigned char CommandParserPeriphPower(char *buffer,unsigned char size);
 unsigned char CommandParserRamp(char *buffer,unsigned char size);
 unsigned char CommandParserRandomWalk(char *buffer,unsigned char size);
 //unsigned char CommandTestPwr(char *buffer,unsigned char size);
+unsigned char CommandParserVT100(char *buffer,unsigned char size);
 
 unsigned char CommandShouldQuit(void);
 void CommandChangeMode(unsigned char newmode);

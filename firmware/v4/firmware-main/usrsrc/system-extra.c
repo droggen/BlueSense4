@@ -356,7 +356,7 @@ unsigned char system_batterystat(unsigned char unused)
 		if(pressduration==37)
 		{
 			// Turn off before hard reset
-			// This appears to address a bug where the RTC loses time (does not detect power fail) when long-pressing the power button)
+			// This address a bug where the RTC loses time (does not detect power fail) when long-pressing the power button, but correctly works with soft-off
 			_system_off();
 
 		}

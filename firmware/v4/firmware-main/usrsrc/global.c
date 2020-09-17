@@ -17,6 +17,7 @@ FILE *file_usb,*file_pri,*file_bt,*file_itm,*file_dbg;
 unsigned char sharedbuffer[520];
 
 unsigned char __mode_sleep=1;
+unsigned char __mode_vt100=0;
 
 // Device name
 unsigned char system_devname[16];
