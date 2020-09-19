@@ -30,6 +30,7 @@
 #include "bsp_driver_sd.h"
 #include "fatfs.h"
 #include "sd/stm_sdio.h"
+#include "ymodem.h"
 
 /*
  * STM32F4
@@ -202,6 +203,7 @@ const COMMANDPARSER CommandParsersSD[] =
 	{'D', CommandParserSDDeleteAll,"D[,<fileno>] Delete all files or if fileno specified deletes the nth file of the root"},
 	{'C', CommandParserSDCreate,"C,<fname>[,<size>,<ascii>[,<bs>] Creates fname and optionally resizes it to size writing ascii bytes in blocks of bs bytes"},
 	{'c', CommandParserSDCat,"c,<fname>[,<maxsize>] Cats the content of fname up to maxsize"},
+	{'Y', CommandParserSDYModemSendFile,"Y,<fname> Sends the file <fname> with YMODEM to the host"},
 	{'i', CommandParserSDCardInfo,"Card information"},
 	{'V', CommandParserSDVolume,help_volume},
 	{'v', CommandParserSDVolumeInfo,"Volume information"},
@@ -669,7 +671,64 @@ unsigned char CommandParserSD(char *buffer,unsigned char size)
 	return 0;
 }
 
+unsigned char CommandParserSDYModemSendLog(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
 
+	unsigned log[5];
+	char filenames[5][64];			// Space to store names
+	char *filenameptr[5]={filenames[0],filenames[1],filenames[2],filenames[3],filenames[4]};			// The ymodem function needs an array of pointers to the file names
+
+
+	unsigned np = ParseCommaGetNumParam(buffer);
+
+	if(np==0)
+		return 2;
+	if(np>5)
+	{
+		fprintf(file_pri,"Maximum 5 log files can be specified\n");
+		return 1;
+	}
+	ParseCommaGetUnsigned(buffer,np,&log[0],&log[1],&log[2],&log[3],&log[4]);
+
+	// Check the log file number on the SD card
+	unsigned char nl = ufat_log_getnumlogs();
+
+	//fprintf(file_pri,"Number of logs: %u\n",nl);
+	fprintf(file_pri,"Logs selected for transfer: ");
+	for(int i=0;i<np;i++)
+		fprintf(file_pri,"%u ",log[i]);
+	fprintf(file_pri,"\n");
+
+	// Check that all the logs are within the available range
+	for(int i=0;i<np;i++)
+	{
+		if(log[i]>=nl)
+		{
+			fprintf(file_pri,"Invalid log files ID specified: the filesystem contains %u logs\n",nl);
+			return 1;
+		}
+	}
+
+	// All the logs are ok: get the filename
+	for(int i=0;i<np;i++)
+	{
+		_ufat_lognumtoname(log[i],(unsigned char*)filenames[i]);
+		fprintf(file_pri,"\t%u: %s\n",log[i],filenames[i]);
+	}
+
+	// Initiate the transfer
+	unsigned char rv = ymodem_send_multi_file(np,filenameptr,file_pri);
+
+	if(rv)
+	{
+		fprintf(file_pri,"\nTransfer error\n");
+		return 1;
+	}
+
+
+	return 0;
+}
 
 
 unsigned char CommandParserSDDetectTest(char *buffer,unsigned char size)
@@ -1085,7 +1144,7 @@ unsigned char CommandParserSDLogRead(char *buffer,unsigned char size)
 	FILE *file = ufat_log_open_read(logn);
 
 
-	fprintf(file_pri,"Log file size: %lu\n",ufat_log_getsize());
+	fprintf(file_pri,"Log file size: %llu\n",ufat_log_getsize());
 
 
 	if(file==0)
@@ -1772,7 +1831,35 @@ unsigned char CommandParserSDCat(char *buffer,unsigned char size)
 
 
 }
+unsigned char CommandParserSDYModemSendFile(char *buffer,unsigned char size)
+{
+	int fsize=0;
+	char fname[256];
+	char *fnameptr[1]={fname};			// Multiple files could be sent in succession; currently we handle only one.
+	char *p1;
 
+
+	// One parameter only (filename)
+	if(ParseComma(buffer,1,&p1))
+		return 2;
+	strcpy(fname,p1);			// Copy the file
+
+
+
+	fprintf(file_pri,"Sending '%s' with YMODEM\n",fname);
+
+	// Initiate the transfer
+	unsigned char rv = ymodem_send_multi_file(1,fnameptr,file_pri);
+
+	if(rv)
+	{
+		fprintf(file_pri,"\nTransfer error\n");
+		return 1;
+	}
+
+
+	return 0;
+}
 
 
 void mode_sd(void)

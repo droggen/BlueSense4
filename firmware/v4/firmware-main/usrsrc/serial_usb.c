@@ -154,7 +154,9 @@ FILE *serial_open_usb()
 
 	// Line buffering speeds up writes by calling cookie_write with up to a buffer-length large payload.
 	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
-	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+	//setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
+	//setvbuf (f, 0, _IOLBF, 128);	// Line buffer buffering
+	setvbuf (f, 0, _IOLBF, 256);	// Line buffer buffering
 
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.

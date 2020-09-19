@@ -356,6 +356,23 @@ void serial_setblockingwrite(FILE *file,unsigned char blocking)
 	return tmpstr;
 }*/
 
+/*
+
+ */
+int fgetc_timeout(FILE *stream, int timeout)
+{
+	uint32_t t1 = HAL_GetTick();
+	while((HAL_GetTick()-t1) < timeout)
+	{
+		int c = fgetc(stream);
+		if(c!=-1)
+			return c;
+	}
+
+	// Return failure
+	return -1;
+}
+
 char *fgets_timeout( char *str, int num, FILE *stream, int timeout)
 {
 	// Emulates fgets but waits timeout miliseconds for a carriage return

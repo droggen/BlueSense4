@@ -10,5 +10,6 @@
 
 
 void mode_interface();
+unsigned char CommandParserIntfYModemSend(char *buffer,unsigned char size);
 
 #endif /* MODE_INTERFACE_H_ */

@@ -116,6 +116,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{0,0,"---- Motion ----"},
 	{'M', CommandParserMotion,help_M},
 	{'m', CommandParserMPUTest,help_m},
+	{'n', CommandParserMPUTestN,help_m},
 	{0,0,"---- Multimodal ----"},
 	{'U', CommandParserSampleMultimodal,"U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]: Multimodal streaming/logging.\n\t\tadcmask and adcperiod are ignored if the mode does not include ADC.\n\t\tUse logfile=-1 for no logging. Duration is seconds."},
 	{0,0,"---- DAC ----"},
@@ -132,6 +133,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{0,0,"---- SD Card ----"},
 	{'I', CommandParserInterface,help_interface},
 	{'X', CommandParserSD,help_sd},
+	{'Y', CommandParserSDYModemSendLog,"Y,<logid0>[,<logid1>[,<logid2>...]] Send log files, specified by their number, by YMODEM to the host"},
 	{0,0,"---- Various ----"},
 	{'F', CommandParserStreamFormat,help_f},
 	//{'G', CommandParserMotionRecog,help_g},
@@ -179,7 +181,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 #if DBG_TIMERELATEDTEST==1
 	{'t', CommandParserTime_Test,help_ttest},
 #endif
-	{'n', CommandParserMPUTestN,help_m},
+
 	{'i', CommandParserInfo,help_info},
 	{'c', CommandParserCallback,help_callback},
 #endif

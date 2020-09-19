@@ -90,6 +90,7 @@ UART MANAGEMENT   UART MANAGEMENT   UART MANAGEMENT   UART MANAGEMENT
 //void serial_setblocking(FILE *file,unsigned char blocking);
 //unsigned char serial_isblocking(FILE *file);
 
+int fgetc_timeout(FILE *stream, int timeout);
 char *fgets_timeout( char *str, int num, FILE *stream, int timeout);
 char *fgets_timeout_1s( char *str, int num, FILE *stream);
 char *fgets_timeout_100ms( char *str, int num, FILE *stream);

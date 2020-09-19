@@ -25,6 +25,7 @@ unsigned char CommandParserSDBench2(char *buffer,unsigned char size);
 unsigned char CommandParserSDBench_t1(char *buffer,unsigned char size);
 unsigned char CommandParserSDBench_t2(char *buffer,unsigned char size);
 unsigned char CommandParserSDDetectTest(char *buffer,unsigned char size);
+unsigned char CommandParserSDYModemSendLog(char *buffer,unsigned char size);
 unsigned char CommandParserSDTest1(char *buffer,unsigned char size);
 unsigned char CommandParserSDReg(char *buffer,unsigned char size);
 unsigned char CommandParserSDRegPUPDActive(char *buffer,unsigned char size);
@@ -49,6 +50,7 @@ unsigned char CommandParserSDVolumeInfo(char *buffer,unsigned char size);
 unsigned char CommandParserSDDeleteAll(char *buffer,unsigned char size);
 unsigned char CommandParserSDCreate(char *buffer,unsigned char size);
 unsigned char CommandParserSDCat(char *buffer,unsigned char size);
+unsigned char CommandParserSDYModemSendFile(char *buffer,unsigned char size);
 
 void mode_sd(void);
 

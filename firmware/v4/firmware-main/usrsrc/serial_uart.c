@@ -166,9 +166,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	//itmprintf("fopencookie: %p\n",f);
 
 	// Buffering can lead to issues when entering command modes ($$$)
-	setvbuf (f, 0, _IONBF, 0 );	// No buffering
-	//setvbuf (f, 0, _IOLBF, 1024);	// Line buffer buffering
-	//setvbuf (f, 0, _IOLBF, 16);	// Line buffer buffering
+	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	setvbuf (f, 0, _IOLBF, 64);	// Line buffer buffering
 
 
