@@ -552,7 +552,8 @@ FILE *ufat_log_open_read(unsigned char n)
 	//setvbuf (f, 0, _IONBF, 0 );	// No buffering
 	//setvbuf (f, 0, _IOLBF, 1024);	// Line buffer buffering
 	//setvbuf (file, 0, _IOLBF, 16);	// Line buffer buffering
-	setvbuf (file, 0, _IOLBF, 256);	// Line buffer buffering
+	//setvbuf (file, 0, _IOLBF, 256);	// Line buffer buffering
+	setvbuf(file,_ufat_vbuf,_IOFBF,UFAT_VBUFMAX);
 
 
 	return file;
@@ -644,7 +645,7 @@ ssize_t ufat_cookie_read(void *__cookie, char *__buf, size_t __n)
 	unsigned br;
 
 	FRESULT res = f_read(&_fsinfo.file_current_log,__buf,__n,&br);
-	//fprintf(file_pri,"res: %d br: %d",res,br);
+	//fprintf(file_pri,"\tres: %d br: %d\n",res,br);
 	if(res!=FR_OK)
 		return 0;
 

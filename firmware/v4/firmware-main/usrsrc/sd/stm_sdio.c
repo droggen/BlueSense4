@@ -313,7 +313,7 @@ unsigned char sd_block_read_n_dma(unsigned long addr,char *buffer,int nsector)
 	HAL_Delay(500);
 	s2 = HAL_SD_GetCardState(&hsd1);
 	fprintf(file_pri,"s %d s2: %d\n",s,s2);
-	return;
+
 
 
 	unsigned t1 = timer_ms_get(),t2;

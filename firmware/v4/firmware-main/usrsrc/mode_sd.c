@@ -187,7 +187,6 @@ const char help_sd_detect[] = "SD detection test";
 const char help_sd_1[] = "tests";
 const char help_sd_bench[]="B,<size>,<pkts> Benchmark FAT write (filesystem level) of <size> bytes in packets of <pkts> bytes (pkts<=256)";
 const char help_sd_bench_ll[]="b,<secfrom>,<secto> Benchmark low-level sector write (sector level) from <secfrom> to <secto> inclusive";
-const char help_sd_logwrite[]="w,<log>,<size>,<pkts>[,<vbuf>] Benchmark file write with stdio of size bytes to logfile log in packets of pkts bytes (pkts<=256)\n\t\tSet full buffering with buffer size vbuf";
 const char help_sd_state[]="Card state";
 const char help_sd_logread[]="r,<log> Reads log file";
 const char help_sd_list[]="List files";
@@ -207,8 +206,10 @@ const COMMANDPARSER CommandParsersSD[] =
 	{'i', CommandParserSDCardInfo,"Card information"},
 	{'V', CommandParserSDVolume,help_volume},
 	{'v', CommandParserSDVolumeInfo,"Volume information"},
-	{'w', CommandParserSDLogWrite,help_sd_logwrite},
-	{'r', CommandParserSDLogRead,help_sd_logread},
+	{0,0,"---- Log benchmark functions ----"},
+	{'w', CommandParserSDLogWriteBenchmark,			"w,<log>,<size>,<pkts>[,<vbuf>] Benchmark file write with stdio of <size> bytes to logfile <log> in packets of <pkts> bytes (<pkts><=256)\n\t\tSet full buffering with buffer size <vbuf>"},
+	{'r', CommandParserSDLogReadBenchmark,	"r,<log>,<pkts>[,<vbuf>] Benchmark file read with stdio from logfile <log> in packets of <pkts> bytes (<pkts><=256)\n\t\tSet full buffering with buffer size <vbuf>"},
+
 
 
 
@@ -1031,16 +1032,12 @@ unsigned char CommandParserSDState(char *buffer,unsigned char size)
 
 	return 0;
 }
-unsigned char CommandParserSDLogWrite(char *buffer,unsigned char size)
+unsigned char CommandParserSDLogWriteBenchmark(char *buffer,unsigned char size)
 {
 	(void) size;
 	unsigned logn,maxs,pkts,vbuf=0;
 	char buf[257];
 
-
-	fprintf(file_pri,"CommandParserSDLogWrite\n");
-
-	HAL_Delay(100);
 
 	if(ParseCommaGetNumParam(buffer)==3)
 	{
@@ -1062,6 +1059,9 @@ unsigned char CommandParserSDLogWrite(char *buffer,unsigned char size)
 	fprintf(file_pri,"Writing to log %d up to %u byes in packets of %u",logn,maxs,pkts);
 	if(vbuf)
 		fprintf(file_pri," with setvbuf %d",vbuf);
+	else
+		fprintf(file_pri," without setvbuf");
+
 	fprintf(file_pri,"\n");
 
 
@@ -1113,38 +1113,27 @@ unsigned char CommandParserSDLogWrite(char *buffer,unsigned char size)
 	}
 	t2 = timer_ms_get();
 
-	unsigned long long kbps = (unsigned long long)tot*1000/(t2-t1)/1024;
-		fprintf(file_pri,"Wrote %u bytes in %u ms: %llu KB/s\n",tot,t2-t1,kbps);
+	unsigned long kbps = (unsigned long long)tot*125/128/(t2-t1);
+	fprintf(file_pri,"Wrote %u bytes in %u ms: %lu KB/s\n",tot,t2-t1,kbps);
 
 	ufat_log_close();
 
 
 	return 0;
 }
-unsigned char CommandParserSDLogRead(char *buffer,unsigned char size)
+/*unsigned char CommandParserSDLogRead(char *buffer,unsigned char size)
 {
 	(void) size;
 	unsigned logn;
 
 
-	fprintf(file_pri,"CommandParserSDLogRead\n");
-
-	HAL_Delay(100);
-
 	if(ParseCommaGetInt(buffer,1,&logn))
 		return 2;
 
 	fprintf(file_pri,"Reading logfile %d\n",logn);
-	//fprintf(file_pri,"current log: %p\n",_fsinfo.file_current_log);
 
-	/*for(unsigned i=0;i<256;i++)
-		buf[i] = 'A'+i%26;
-	buf[pkts]=0;*/
 
 	FILE *file = ufat_log_open_read(logn);
-
-
-	fprintf(file_pri,"Log file size: %llu\n",ufat_log_getsize());
 
 
 	if(file==0)
@@ -1152,6 +1141,8 @@ unsigned char CommandParserSDLogRead(char *buffer,unsigned char size)
 		fprintf(file_pri,"Error opening log %d\n",logn);
 		return 1;
 	}
+
+	fprintf(file_pri,"Log file size: %llu\n",ufat_log_getsize());
 
 	unsigned nr=0;
 	while(1)
@@ -1171,7 +1162,106 @@ unsigned char CommandParserSDLogRead(char *buffer,unsigned char size)
 
 
 	return 0;
+}*/
+
+unsigned char CommandParserSDLogReadBenchmark(char *buffer,unsigned char size)
+{
+	(void) size;
+	unsigned logn,maxs,pkts,vbuf=0;
+	char buf[257];
+
+
+	if(ParseCommaGetNumParam(buffer)==2)
+	{
+		if(ParseCommaGetInt(buffer,2,&logn,&pkts))
+			return 2;
+	}
+	else
+	{
+		if(ParseCommaGetInt(buffer,3,&logn,&pkts,&vbuf))
+			return 2;
+	}
+
+	if(pkts>256 || pkts<=0)
+	{
+		fprintf(file_pri,"Packet size error\n");
+		return 2;
+	}
+
+	fprintf(file_pri,"Reading from log %d in packets of %u",logn,pkts);
+	if(vbuf)
+		fprintf(file_pri," with setvbuf %d",vbuf);
+	else
+		fprintf(file_pri," without setvbuf");
+
+	fprintf(file_pri,"\n");
+
+	FILE *file = ufat_log_open_read(logn);
+	if(file==0)
+	{
+		fprintf(file_pri,"Error opening log %d\n",logn);
+		return 1;
+	}
+
+
+
+	maxs = ufat_log_getsize();
+
+	fprintf(file_pri,"Log file size: %u\n",maxs);
+
+
+	if(vbuf)
+	{
+		if(setvbuf(file, 0, _IOFBF, vbuf))
+		{
+			fprintf(file_pri,"Error: setvbuf failed\n");
+		}
+	}
+
+	unsigned tot=0;
+	unsigned suc=0;
+	unsigned t1,t2;
+	t1 = timer_ms_get();
+	while(maxs)
+	{
+		unsigned n = maxs;
+		if(n>pkts)
+			n=pkts;
+
+		//fprintf(file_pri,"maxs: %u. tot: %u. Reading %u: \n",maxs,tot,n);
+
+		unsigned nr = fread(buf,1,n,file);
+		//fprintf(file_pri,"nr: %u (n=%u)\n",nr,n);
+
+		if(nr == n)
+		{
+			//fprintf(file_pri,"new maxs: %u. new tot: %u\n",maxs,tot);
+			tot+=pkts;
+			maxs-=pkts;
+			suc++;
+		}
+		else
+		{
+
+			break;
+		}
+
+	}
+	t2 = timer_ms_get();
+
+	unsigned long kbps = (unsigned long long)tot*125/128/(t2-t1);
+	fprintf(file_pri,"Read %u bytes in %u ms: %lu KB/s\n",tot,t2-t1,kbps);
+
+	ufat_log_close();
+
+
+
+
+
+
+	return 0;
 }
+
 #if 0
 unsigned char CommandParserSDLogTest3(char *buffer,unsigned char size)
 {
