@@ -345,11 +345,8 @@ unsigned char serial_usb_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 ******************************************************************************/
 unsigned char serial_usb_fischar(SERIALPARAM *sp)
 {
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
-	{
-		if(buffer_level(&SERIALPARAM_USB.rxbuf))
-			return 1;
-	}
+	if(buffer_level(&SERIALPARAM_USB.rxbuf))
+		return 1;
 	return 0;
 }
 

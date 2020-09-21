@@ -17,20 +17,22 @@
 
 unsigned char _stm_adc_buffer_rdptr,_stm_adc_buffer_wrptr;
 
-#define DMABUFSIZ STM_ADC_MAXCHANNEL*STM_ADC_MAXGROUPING*2			// We sample up to STM_ADC_MAXGROUPING times, before triggering an interrupt
+//
+#define DMABUFSIZ STM_ADC_MAXCHANNEL*STM_ADC_MAXGROUPING*2						// We sample up to STM_ADC_MAXGROUPING times, before triggering an interrupt
 
-unsigned short _stm_adc_dmabuf[DMABUFSIZ];			// DMA tempory buffer - DMA uses double buffering so buffer twice the size of the payload (maxchannel)
+unsigned short _stm_adc_dmabuf[DMABUFSIZ];										// DMA tempory buffer - DMA uses double buffering so buffer twice the size of the payload (maxchannel)
 
-unsigned short _stm_adc_buffers[STM_ADC_BUFFER_NUM][STM_ADC_MAXCHANNEL];		// ADC buffer
+unsigned short _stm_adc_buffers[STM_ADC_BUFFER_NUM][STM_ADC_MAXCHANNEL];		// ADC buffer: filled by DMA/interrupts; emptied by user application. Buffer size: STM_ADC_BUFFER_NUM entries
 unsigned long _stm_adc_buffers_time[STM_ADC_BUFFER_NUM];						// ADC buffer acquisition time
 unsigned long _stm_adc_buffers_pktnum[STM_ADC_BUFFER_NUM];						// ADC buffer packet counter
 unsigned _stm_adc_grouping;														// ADC performs grouping conversions before triggering an interrupt
 unsigned long _stm_adc_ctr_acq,_stm_adc_ctr_loss;								// DMA acquisition statistics
 
 // pins and ports hold the pin and port of each BS4 ADC input.
-uint32_t _stm_adc_pins[5]={X_0_ADC0_Pin,X_1_ADC1_Pin,X_2_ADC2_Pin,X_3_ADC3_Pin,X_4_ADC_DAC_Pin};
-GPIO_TypeDef  *_stm_adc_ports[5]={X_0_ADC0_GPIO_Port,X_1_ADC1_GPIO_Port,X_2_ADC2_GPIO_Port,X_3_ADC3_GPIO_Port,X_4_ADC_DAC_GPIO_Port};
+uint32_t _stm_adc_pins[5] = 		{X_0_ADC0_Pin,			X_1_ADC1_Pin,		X_2_ADC2_Pin,		X_3_ADC3_Pin,		X_4_ADC_DAC_Pin};
+GPIO_TypeDef  *_stm_adc_ports[5]=	{X_0_ADC0_GPIO_Port,	X_1_ADC1_GPIO_Port,	X_2_ADC2_GPIO_Port,	X_3_ADC3_GPIO_Port,	X_4_ADC_DAC_GPIO_Port};
 unsigned _stm_adc_channels;														// Holds the currenly select channels for conversions
+
 /*
 DMA must be configured as circular; DMA transfer must be twice the size of the payload to use double buffering.
 Normal mode DMA stops (and doesn't respond to triggers) once the payload is transfered.
@@ -125,9 +127,10 @@ DMA normal
 
 */
 /******************************************************************************
-	function: stm_adc_acquire_start
+	function: stm_adc_acquire_start_us
 *******************************************************************************
-	Start data acquisition of specified channels
+	Start data acquisition of specified channels.
+	Specify the sample rate in uS.
 
 	Setups GPIO as analog ADC.
 
@@ -138,22 +141,71 @@ DMA normal
 		0		-		Ok
 		1		-		Error
 ******************************************************************************/
-void stm_adc_acquire_start(unsigned char channels,unsigned char vbat,unsigned char vref,unsigned char temp,unsigned prescaler,unsigned reload)
+void stm_adc_acquire_start_us(unsigned char channels,unsigned char vbat,unsigned char vref,unsigned char temp,unsigned periodus)
+{
+	// Calculate the prescaler and divider
+	unsigned prescaler;
+
+	// Prescaler: maps from TIM frequency to 10uS period (10uS <> 100KHz).
+
+	int timclk = _stm_adc_gettimfrq();
+
+	prescaler = (timclk/100000)-1;			// Subract one as frequency is divided by prescaler+1
+
+	int divider;
+	// Calculates divider, rouding to lower values;
+	divider = (periodus/10)-1;				// Subtract one as frequency is divided by divider+1
+	if(divider<0) divider=0;				// Minimum divider is 0 (10uS sample period)
+
+	_stm_adc_acquire_start(channels,vbat,vref,temp,prescaler,divider);
+
+
+}
+/******************************************************************************
+function: _stm_adc_acquire_start
+*******************************************************************************
+Start data acquisition of specified channels.
+Specify the sample rate through dividers.
+
+Setups GPIO as analog ADC.
+
+Parameters:
+	channels	-	Bitmask of BlueSense channels: bit 0=X0_ADC0; bit 4 = X4_ADC4
+
+Returns:
+	0		-		Ok
+	1		-		Error
+******************************************************************************/
+void _stm_adc_acquire_start(unsigned char channels,unsigned char vbat,unsigned char vref,unsigned char temp,unsigned prescaler,unsigned reload)
 {
 	unsigned grouping;
-	// Calculate the grouping of ADC conversions: interrupt triggered every _stm_adc_grouping to minimise interrupt overhead
+	unsigned maxips = 100;
 
-	unsigned timerclock=20000000;
-	unsigned ips = timerclock/(prescaler+1)/(reload+1);	// Number of interrupt per seconds
-	// Keep interrupt/seconds <100
-	if(ips>100)
-		grouping = ips/100;
+
+	// Calculate the grouping of ADC conversions: interrupt triggered every _stm_adc_grouping to minimise interrupt overhead
+	// Find grouping which allows for IPS as low as, but higher or equal than maxips (e.g. 100Hz)
+
+	fprintf(file_pri,"Channels: %u vbat: %u vref: %u temp: %u Prescaler: %u reload: %u\n",channels,vbat,vref,temp,prescaler,reload);
+
+
+	unsigned timerclock=_stm_adc_gettimfrq();
+	unsigned ips = ips = timerclock/(prescaler+1)/(reload+1);	// Number of interrupt per seconds assuming one interrupt per sample
+
+	fprintf(file_pri,"ADC interrupt/second prior to grouping: %u\n",ips);
+
+
+	grouping = ips/maxips;
 	if(grouping<1)
 		grouping=1;
 	if(grouping>STM_ADC_MAXGROUPING)
 		grouping=STM_ADC_MAXGROUPING;
+
 	ips = ips/grouping;
-	fprintf(file_pri,"ADC interrupts/second: %u (groups of %u)\n",ips,_stm_adc_grouping);
+
+
+
+	fprintf(file_pri,"ADC interrupts/second: %u (groups of %u)\n",ips,grouping);
+
 
 	//grouping = 1;
 	//grouping = STM_ADC_MAXGROUPING;
@@ -171,6 +223,7 @@ void stm_adc_acquire_start(unsigned char channels,unsigned char vbat,unsigned ch
 	// Clear buffer and statistics
 	stm_adc_data_clear();
 }
+
 void stm_adc_acquire_stop()
 {
 	HAL_ADC_Stop_DMA(&hadc1);
@@ -179,6 +232,27 @@ void stm_adc_acquire_stop()
 	// Deinit adc
 	stm_adc_deinit();
 }
+
+unsigned _stm_adc_gettimfrq()
+{
+	unsigned timclk;
+	unsigned pclk = HAL_RCC_GetPCLK2Freq();
+	// Get the APB2 timer clock frequency: it is equal to APB2 only if the APB2 prescaler is 1, otherwise it is double.
+	// Get PCLK2 prescaler
+	if((RCC->CFGR & RCC_CFGR_PPRE2) == 0)
+	{
+		// PCLK2 prescaler equal to 1 => TIMCLK = PCLK2
+		timclk = pclk;
+	}
+	else
+	{
+		// PCLK prescaler different from 1 => TIMCLK = 2 * PCLK
+		timclk = 2*pclk;
+	}
+	fprintf(file_pri,"APB2 peripheral clock: %u APB2 timer clock: %u\n",pclk,timclk);
+	return timclk;
+}
+
 /******************************************************************************
 	function: stm_adc_init
 *******************************************************************************
@@ -206,8 +280,8 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 	const unsigned bs2maxchannel = 8;
 
 	// Mapping of bluesense channels to STM channels
-	uint32_t bs2stmmap[8] = {ADC_CHANNEL_1, ADC_CHANNEL_2, ADC_CHANNEL_4, ADC_CHANNEL_13, ADC_CHANNEL_9, ADC_CHANNEL_VBAT, ADC_CHANNEL_VREFINT, ADC_CHANNEL_TEMPSENSOR};
-	uint32_t bs2stmrank[8] = {ADC_REGULAR_RANK_1,ADC_REGULAR_RANK_2,ADC_REGULAR_RANK_3,ADC_REGULAR_RANK_4,ADC_REGULAR_RANK_5,ADC_REGULAR_RANK_6,ADC_REGULAR_RANK_7,ADC_REGULAR_RANK_8};
+	uint32_t bs2stmmap[8] = 	{ADC_CHANNEL_1, 		ADC_CHANNEL_2, 		ADC_CHANNEL_4, 		ADC_CHANNEL_13, 	ADC_CHANNEL_9, 		ADC_CHANNEL_VBAT, 	ADC_CHANNEL_VREFINT, 	ADC_CHANNEL_TEMPSENSOR};
+	uint32_t bs2stmrank[8] = 	{ADC_REGULAR_RANK_1,	ADC_REGULAR_RANK_2,	ADC_REGULAR_RANK_3,	ADC_REGULAR_RANK_4,	ADC_REGULAR_RANK_5,	ADC_REGULAR_RANK_6,	ADC_REGULAR_RANK_7,		ADC_REGULAR_RANK_8};
 	/*uint32_t *sqr[bs2maxchannel] = 		{ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,
 							ADC1_BASE+0x34,ADC1_BASE+0x34,ADC1_BASE+0x34,ADC1_BASE+0x34};
 	unsigned sqroff[bs2maxchannel]=		{6,12,18,24,0,6,12,18};*/
@@ -227,7 +301,7 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 	_stm_adc_channels = channels;		// Save this for future de-initialisation
 
 
-	fprintf(file_pri,"Channels: %X\n",_stm_adc_channels);
+
 
 	int nconv=0;
 	for(int i=0;i<bs2maxchannel;i++)
@@ -236,7 +310,7 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 			nconv++;
 	}
 
-	fprintf(file_pri,"nconv: %d\n",nconv);
+	fprintf(file_pri,"Channels: %X. Number of conversions in a scan: %u\n",_stm_adc_channels,nconv);
 
 
 	// Initialise the GPIO in analog mode
@@ -325,7 +399,7 @@ void stm_adc_deinit()
 {
 	// Denitialise the GPIO to analog mode
 	stm_adc_deinit_gpiotoanalog(_stm_adc_channels);
-#warning to implement
+#warning check if must deinitialise internal channels
 }
 
 /******************************************************************************
@@ -628,7 +702,7 @@ unsigned char stm_adc_acquirecontinuously(unsigned grouping)
 	if(grouping<1) grouping=1;
 	if(grouping>STM_ADC_MAXGROUPING) grouping=STM_ADC_MAXGROUPING;
 
-	//fprintf(file_pri,"Num conv: %d Grouping: %u\n",hadc1.Init.NbrOfConversion,grouping);
+	fprintf(file_pri,"Num conv: %d Grouping: %u\n",hadc1.Init.NbrOfConversion,grouping);
 
 	_stm_adc_grouping = grouping;
 

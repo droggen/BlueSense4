@@ -178,7 +178,8 @@ void mode_sample_multimodal(void)
 	{
 		// Initialise ADC with channels and time; round time to multiple of 10uS
 		fprintf(file_pri,"ADC sampling: period: %u mask: %02X\n",mode_adc_period,mode_adc_mask);
-		stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
+		//stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
+		stm_adc_acquire_start_us(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,mode_adc_period);
 	}
 	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
 	{

@@ -51,6 +51,7 @@
 #include "mode_sample_multimodal.h"
 #include <mode_benchmarks.h>
 #include "mode_dac.h"
+#include "mode_serial.h"
 
 void mode_dispatch(void)
 {

@@ -57,7 +57,7 @@ const COMMANDPARSER CommandParsersADC[] =
 { 
 	{'H', CommandParserHelp,help_h},
 	{'N', CommandParserAnnotation,help_annotation},
-	{'F', CommandParserStreamFormat,help_f},
+	//{'F', CommandParserStreamFormat,help_f},
 //	{'W', CommandParserSwap,help_w},
 	{'i',CommandParserInfo,help_info},
 	{'!', CommandParserQuit,help_quit}
@@ -267,7 +267,8 @@ void mode_sample_adc(void)
 	CurrentAnnotation=0;
 	
 	// Initialise ADC with channels and time; round time to multiple of 10uS
-	stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
+	// stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
+	stm_adc_acquire_start_us(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,mode_adc_period);
 
 
 	// Clear statistics and initialise timers.
@@ -277,6 +278,7 @@ void mode_sample_adc(void)
 	{
 		// Depending on the "fastbin" mode either go through the fast "keypress" exit, or the slower command parser.
 		if(mode_adc_fastbin)
+		//if(0)
 		{
 			// Keypress to quit - faster than parsing user commands.
 			if(fischar(file_pri))		// Faster than fgetc
@@ -311,30 +313,36 @@ void mode_sample_adc(void)
 		}
 		
 		// Acquire and send data if available
-		//_MODE_SAMPLE_ADC_GET_AND_SEND;
-		{
+		_MODE_SAMPLE_ADC_GET_AND_SEND;
+		/*{
+			unsigned level = stm_adc_data_level();
 			unsigned numchannels;
 			unsigned long pktsample,timesample;
-			if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
+			for(unsigned li=0;li<level;li++)
 			{
-				switch(mode_adc_fastbin)
+				if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
 				{
-					case 1:
-						putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
-						break;
-					case 2:
-						putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);
-						break;
-					case 0:
-					default:
-						putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);
+					switch(mode_adc_fastbin)
+					{
+						case 1:
+							putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
+							break;
+						case 2:
+							putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);
+							break;
+						case 0:
+						default:
+							putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);
+					}
+					if(putbufrv)
+						stat_adc_samplesendfailed++;
+					else
+						stat_adc_samplesendok++;
 				}
-				if(putbufrv)
-					stat_adc_samplesendfailed++;
 				else
-					stat_adc_samplesendok++;
+					break;
 			}
-		}
+		}*/
 
 
 		// Sleep
@@ -344,6 +352,9 @@ void mode_sample_adc(void)
 	
 	// Stop sampling
 	stm_adc_acquire_stop();
+
+	// Break to let terminal recover
+	HAL_Delay(100);
 
 	// End the logging, if logging was ongoing
 	mode_sample_logend();
@@ -471,8 +482,9 @@ unsigned char mode_sample_adc_streamfastbin16(FILE *file_stream,unsigned numchan
 		if(dl==header)
 			dl--;
 
-		buf[o++] = (unsigned char)dh;
+		// Send in little endian
 		buf[o++] = (unsigned char)dl;
+		buf[o++] = (unsigned char)dh;
 	}
 	unsigned char putbufrv = fputbuf(file_stream,(char*)buf,numchannels*2+1);
 	return putbufrv;

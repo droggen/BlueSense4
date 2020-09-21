@@ -49,7 +49,9 @@ const COMMANDPARSER CommandParsersADCTST[] =
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
 
-	{0,0,"---- General help: internal microphone ----"},
+	{0,0,"---- General help: ADC ----"},
+	{'K', CommandParserADCBench,"Benchmark ADC acquisition"},
+	{0,0,"---- Dev ----"},
 	{'1', CommandParserADCTest1,"stuff"},
 	{'2', CommandParserADCTest2,"stuff"},
 	{'3', CommandParserADCTest3,"stuff"},
@@ -64,7 +66,7 @@ const COMMANDPARSER CommandParsersADCTST[] =
 	{'T', CommandParserADCTestTimerInit,"T,prescaler,reload: Initialise and start timer"},
 	{'t', CommandParserADCTestTimer,"Stop timer"},
 	{'x', CommandParserADCTestComplete,"Complete test"},
-	{'K', CommandParserADCBench,"Benchmark ADC acquisition"},
+
 	{'f', CommandParserADCTestFgetc,"fgetc test"},
 
 };
@@ -540,7 +542,7 @@ unsigned char CommandParserADCAcquire(char *buffer,unsigned char size)
 
 
 	// Start
-	stm_adc_acquire_start(channels,vbat,vref,temp,prescaler,reload);
+	_stm_adc_acquire_start(channels,vbat,vref,temp,prescaler,reload);
 
 
 	fprintf(file_pri,"Press key to stop.\n");
@@ -591,14 +593,12 @@ unsigned char CommandParserADCBench(char *buffer,unsigned char size)
 
 
 
-	unsigned char channels[2] = {1,31};
-	unsigned reloads[6] = {1000, 500, 250, 125, 100, 50};		// Time in microsecond 1KHz, 2KHz, 4KHZ, 8KHz, 10KHz, 20KHz
+	unsigned char channels[3] = {1,31,255};							// 1 external channel; 5 external channels; 5 ext+3 internal channels
+	unsigned periodus[6] = {10000, 1000, 500, 250, 100, 50};		// Period in microseconds 100Hz, 1KHz, 2KHz, 4KHZ, 10KHz, 20KHz
 
 
 	long int perf,refperf;
-	//unsigned long int mintime=10;
-	unsigned long int mintime=5;
-	unsigned prescaler = 20-1;		// 1us time unit
+	unsigned long int mintime=4;
 
 
 	stm_adc_acquire_stop();
@@ -608,9 +608,9 @@ unsigned char CommandParserADCBench(char *buffer,unsigned char size)
 
 	for(int rc = 0;rc<6;rc++)
 	{
-		for(int nc = 0; nc<2; nc++)
+		for(int nc = 0; nc<3; nc++)
 		{
-			stm_adc_acquire_start(channels[nc],0,0,0,prescaler,reloads[rc]-1);		// -1 to ensure microseconds
+			stm_adc_acquire_start_us(channels[nc],0,0,0,periodus[rc]);
 
 			perf = stm_adc_perfbench_withreadout(mintime);
 
@@ -620,7 +620,7 @@ unsigned char CommandParserADCBench(char *buffer,unsigned char size)
 			if(load<0)
 				load=0;
 
-			fprintf(file_pri,"\tBenchmark dt=%u us channels=%u: perf: %lu (instead of %lu). CPU load %lu %%\n",reloads[rc],channels[nc],perf,refperf,load);
+			fprintf(file_pri,"\tBenchmark dt=%u us channels=%u: perf: %lu (instead of %lu). CPU load %lu %%\n",periodus[rc],channels[nc],perf,refperf,load);
 		}
 	}
 

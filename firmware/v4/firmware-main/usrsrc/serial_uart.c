@@ -1094,11 +1094,8 @@ unsigned char serial_uart_putbuf(SERIALPARAM *sp,char *data,unsigned short n)
 ******************************************************************************/
 unsigned char serial_uart_fischar(SERIALPARAM *sp)
 {
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
-	{
-		if(buffer_level(&sp->rxbuf))
-			return 1;
-	}
+	if(buffer_level(&sp->rxbuf))
+		return 1;
 	return 0;
 }
 

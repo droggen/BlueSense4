@@ -108,10 +108,10 @@ const COMMANDPARSER CommandParsersIdle[] =
 	
 	
 	{0,0,"---- Sound ----"},
-	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging.\n\t\tNo parameters to list modes.\n\t\tUse logfile=-1 for no logging. Duration is seconds.\n\t\tleft_right: 0=left, 1=right, 2=stereo."},
+	{'S', CommandParserSampleSound,"S[,<mode>[,<left_right>[,<logfile>[,<duration>]]]: Sound streaming/logging.\n\t\tNo parameters to list modes.\n\t\tLogs to logfile (use -1 not to log) and runs for the specified duration.\n\t\tleft_right: 0=left, 1=right, 2=stereo."},
 	{'s', CommandParserAudio,help_audio},
 	{0,0,"---- ADC ----"},
-	{'A', CommandParserADC,help_a},
+	{'A', CommandParserADC,"A,<mask>,<period>,[fastbin,[<logfile>[,<duration>]]]: ADC sampling/logging.\n\t\tInterrupt with keypress or !.\n\t\tmask: ADC channel bitmask in decimal. Bits 0 to 4=ext channel (bit 0 is ADC0, ...), bit 5=vbat, 6=vref, 7=temp)\n\t\tperiod: sample period in microseconds.\n\t\tfastbin=1: streams in frameless 8-bit binary (use only 1 channel to allow decoding).\n\t\tfastbin=2: binary \"D;s\" 16-bit format with 1 byte frame.\n\t\tLogs to logfile (use -1 not to log) and runs for the specified duration."},
 	{'a', CommandParserADCTest,help_a_test},
 	{0,0,"---- Motion ----"},
 	{'M', CommandParserMotion,help_M},

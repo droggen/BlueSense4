@@ -7,24 +7,34 @@
 /*
  *
 */
-#define _MODE_SAMPLE_ADC_GET_AND_SEND		{	\
-												unsigned numchannels;	\
-												unsigned long pktsample,timesample;	\
-												if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))	\
-												{	\
-													if(mode_adc_fastbin)	\
+#define _MODE_SAMPLE_ADC_GET_AND_SEND		{												\
+												unsigned level = stm_adc_data_level();		\
+												unsigned numchannels;						\
+												unsigned long pktsample,timesample;			\
+												for(unsigned li=0;li<level;li++)			\
+												{											\
+													if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))	\
 													{	\
-														putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);	\
-													}	\
-													else	\
-													{	\
-														putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);	\
-													}	\
-													if(putbufrv)	\
-														stat_adc_samplesendfailed++;	\
-													else	\
-														stat_adc_samplesendok++;	\
-												} 	\
+														switch(mode_adc_fastbin)			\
+														{									\
+															case 1:							\
+																putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);	\
+																break;						\
+															case 2:							\
+																putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);	\
+																break;						\
+															case 0:							\
+															default:						\
+																putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);	\
+														}	\
+														if(putbufrv)						\
+															stat_adc_samplesendfailed++;	\
+														else								\
+															stat_adc_samplesendok++;		\
+													} 										\
+													else									\
+														break;								\
+												} 											\
 											}
 
 extern unsigned mode_adc_period;
