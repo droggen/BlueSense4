@@ -377,7 +377,10 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 			continue;
 		sConfig.Channel = bs2stmmap[i];
 		sConfig.Rank = bs2stmrank[rankidx];
-		sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+		// sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;			// Highest
+		//sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
+		sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;			// AHB=32MHz; ADC clock = 8MHz; sample time: 8MHz/247 = 32KHz
+		//sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
 		sConfig.SingleDiff = ADC_SINGLE_ENDED;
 		sConfig.OffsetNumber = ADC_OFFSET_NONE;
 		sConfig.Offset = 0;
