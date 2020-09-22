@@ -204,7 +204,8 @@ Benchmarks at SPIclk=2.5MHz CPUclk=20MHz
 void mpu_isr(void)
 {
 	//mpu_isr_blocking();
-	mpu_isr_partblocking();
+	//mpu_isr_partblocking();
+	mpu_isr_partpartblocking();
 }
 
 // Blocking SPI read within this interrupt
@@ -288,6 +289,68 @@ void mpu_isr_partblocking(void)
 
 	// Statistics
 	mpu_cnt_int++;
+
+	// Software sample rate divider. Not used with ICM
+	__mpu_sample_softdivider_ctr++;
+	if(__mpu_sample_softdivider_ctr>__mpu_sample_softdivider_divider)
+	{
+		__mpu_sample_softdivider_ctr=0;
+
+		// Statistics
+		mpu_cnt_sample_tot++;
+
+
+		// Automatically read data
+		if(__mpu_autoread)
+		{
+			__mpu_data_packetctr_current=mpu_cnt_sample_tot;
+			// Initiate readout: 3xA + 3*G + 1*T + 3*M+Mtmp+Mstatus = 22 bytes
+
+			__mpu_acqtime = timer_ms_get();
+
+			// Registers start at ICM_R_ACCEL_XOUT_H.
+			unsigned char r = mpu_readregs_try_int_cb_raw(ICM_R_ACCEL_XOUT_H,22,__mpu_read_cb);
+			if(r)
+			{
+				mpu_cnt_sample_errbusy++;
+			}
+			// Function returns - follow-up processing in __mpu_read_cb
+		} 	// Autoread
+	}	// Software divider
+}
+// Two interrupt driven interactions to get status flag then read data
+// Nonblocking read to get status (5 bytes transfer), callback to get data (22 bytes transfer)
+void mpu_isr_partpartblocking()
+{
+	// ICM20948
+	// Read the status of the 4 interrupt flags. Interrupt driven with callback
+	unsigned char r = mpu_readregs_try_int_cb_raw(ICM_R_INT_STATUS,4,__mpu_read_status_cb);
+	if(r)		// Failed to read - e.g. peripheral busy
+	{
+		mpu_cnt_spurious++;
+		return;
+	}
+}
+void __mpu_read_status_cb()
+{
+	// Print information about interrupts
+	//fprintf(file_pri,"I %02X %02X %02X %02X\n",s[1],s[2],s[3],s[4]);
+
+	_mpu_ongoing=0;									// Required when using mpu_readregs_int_cb_raw otherwise no further transactions possible
+
+	if( (_mpu_tmp[2]&1) == 0)		// Check INT_STATUS_1 bit 0
+	{
+		mpu_cnt_spurious++;
+		return;
+	}
+
+	// Statistics
+	mpu_cnt_int++;
+
+	// Trigger the read operation
+
+
+
 
 	// Software sample rate divider. Not used with ICM
 	__mpu_sample_softdivider_ctr++;

@@ -489,7 +489,7 @@ void stream_sound_status(FILE *f,unsigned char bin)
 	{
 		fprintf(f,"# SND t=%05lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
 		fprintf(f,"; wps=%lu",wps);
-		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; sampleerr=%09lu (overrun=%09lu; errsend=%09lu); errppm=%lu; Numbers are %s; sr=%05lu",
+		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; samplerr=%09lu (overrun=%09lu; errsend=%09lu); errppm=%lu; Numbers are %s; sr=%05lu",
 				totsample,sendok,
 				toterr,
 				overrun,stat_snd_samplesendfailed,

@@ -34,7 +34,7 @@
 #include "commandset.h"
 #include "ltc2942.h"
 
-unsigned mode_sample_multimodal_mode;
+unsigned mode_sample_multimodal_mode,mode_sample_stereo;
 
 const COMMANDPARSER CommandParsersMultimodal[] =
 {
@@ -52,7 +52,7 @@ const unsigned char CommandParsersMultimodalNum=sizeof(CommandParsersMultimodal)
 *******************************************************************************
 	Parses a user command to enter the multimodal mode.
 
-	Command format: U,[<mode>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]
+	Command format: U,[<mode>,<stereo>,<adcmask>,<adcperiod>[[,<logfile>[,<duration>]]]
 
 
 	Parameters:
@@ -66,43 +66,48 @@ unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size)
 	mode_sample_param_logfile = -1;
 	mode_adc_fastbin=0;
 
-	unsigned modemap[4] = {MULTIMODAL_MPU|MULTIMODAL_SND|MULTIMODAL_ADC,MULTIMODAL_MPU|MULTIMODAL_SND,MULTIMODAL_MPU|MULTIMODAL_ADC,MULTIMODAL_SND|MULTIMODAL_ADC};	// Bitmap indicating which modality to include: MPU | SND | ADC
+	unsigned modemap[4] = {	MULTIMODAL_MPU|MULTIMODAL_SND|MULTIMODAL_ADC,
+							MULTIMODAL_MPU|MULTIMODAL_SND,
+							MULTIMODAL_MPU|MULTIMODAL_ADC,
+							MULTIMODAL_SND|MULTIMODAL_ADC};	// Bitmap indicating which modality to include: MPU | SND | ADC
 
 
 	int np = ParseCommaGetNumParam(buffer);
 	if(np==0)
 	{
 		fprintf(file_pri,"Available multimodal modes:\n");
-		fprintf(file_pri,"\t0: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-8KHz + ADC(mask)\n");
-		fprintf(file_pri,"\t1: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + Sound-8KHz\n");
-		fprintf(file_pri,"\t2: MPU-200Hz(Acc + Gyro + Mag + Quaternion) + ADC(mask)\n");
+		fprintf(file_pri,"\t0: MPU-225Hz(Acc + Gyro + Mag + Quaternion) + Sound-16KHz + ADC(mask)\n");
+		fprintf(file_pri,"\t1: MPU-225Hz(Acc + Gyro + Mag + Quaternion) + Sound-16KHz\n");
+		fprintf(file_pri,"\t2: MPU-225Hz(Acc + Gyro + Mag + Quaternion) + ADC(mask)\n");
 		fprintf(file_pri,"\t3: Sound-16KHz + ADC(mask)\n");
 		return 0;
 	}
 
-	if(np>0 && np<3)
+	if(np>0 && np<4)
 	{
 		fprintf(file_pri,"Invalid number of parameters\n");
 		return 2;
 	}
 	switch(np)
 	{
-		case 3:
-			if(ParseCommaGetInt(buffer,3,&mode_sample_multimodal_mode,&mode_adc_mask,&mode_adc_period))
-				return 2;
-			break;
 		case 4:
-			if(ParseCommaGetInt(buffer,4,&mode_sample_multimodal_mode,&mode_adc_mask,&mode_adc_period,&mode_sample_param_logfile))
+			if(ParseCommaGetUnsigned(buffer,4,&mode_sample_multimodal_mode,&mode_sample_stereo,&mode_adc_mask,&mode_adc_period))
 				return 2;
 			break;
 		case 5:
+			if(ParseCommaGetUnsigned(buffer,5,&mode_sample_multimodal_mode,&mode_sample_stereo,&mode_adc_mask,&mode_adc_period,&mode_sample_param_logfile))
+				return 2;
+			break;
+		case 6:
 		default:
-			if(ParseCommaGetInt(buffer,5,&mode_sample_multimodal_mode,&mode_adc_mask,&mode_adc_period,&mode_sample_param_logfile,&mode_sample_param_duration))
+			if(ParseCommaGetUnsigned(buffer,6,&mode_sample_multimodal_mode,&mode_sample_stereo,&mode_adc_mask,&mode_adc_period,&mode_sample_param_logfile,&mode_sample_param_duration))
 				return 2;
 			break;
 	}
 
 	if(mode_sample_multimodal_mode>3)
+		return 2;
+	if(mode_sample_stereo>2)
 		return 2;
 
 	// Convert the mode to a modemap
@@ -178,7 +183,6 @@ void mode_sample_multimodal(void)
 	{
 		// Initialise ADC with channels and time; round time to multiple of 10uS
 		fprintf(file_pri,"ADC sampling: period: %u mask: %02X\n",mode_adc_period,mode_adc_mask);
-		//stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
 		stm_adc_acquire_start_us(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,mode_adc_period);
 	}
 	if(mode_sample_multimodal_mode & MULTIMODAL_MPU)
@@ -191,8 +195,7 @@ void mode_sample_multimodal(void)
 	{
 		fprintf(file_pri,"SND sampling\n");
 		// Set audio mode
-		//stm_dfsdm_init(STM_DFSMD_INIT_16K);
-		stm_dfsdm_init(STM_DFSMD_INIT_8K,STM_DFSDM_LEFT);
+		stm_dfsdm_init(STM_DFSMD_INIT_16K,mode_sample_stereo);
 	}
 
 

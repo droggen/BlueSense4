@@ -279,7 +279,8 @@ toto1:
 
 
 	// Enable SPI1
-	stmspi1_stm32l4_init(2500000);
+	//stmspi1_stm32l4_init(2500000);
+	stmspi1_stm32l4_init(7000000);
 
 	// Enable MPU power
 	system_motionvcc_enable();
@@ -368,7 +369,8 @@ toto1:
 	//stm_sdm_setinitparam(8,1);			// Initialisation for 20MHz bus (2.5MHz SDIO)
 	//stm_sdm_setinitparam(6,1);			// Initialisation for 16MHz bus (2.66MHz SDIO)
 
-	stm_sdm_setinitparam(4,1);			// Initialisation for 16MHz bus (4MHz SDIO)
+	//stm_sdm_setinitparam(4,1);			// Initialisation for 16MHz bus (4MHz SDIO)
+	stm_sdm_setinitparam(2,1);			// Initialisation for 16MHz bus (8MHz SDIO)
 
 
 	//stm_sdm_init();					// This will be called by FatFs driver

@@ -7,7 +7,8 @@
 //#define STM_DFSMD_BUFFER_NUM	16
 #define STM_DFSMD_BUFFER_NUM	32
 #define STM_DFSMD_BUFFER_MASK	(STM_DFSMD_BUFFER_NUM-1)
-#define STM_DFSMD_BUFFER_SIZE	256
+//#define STM_DFSMD_BUFFER_SIZE	256
+#define STM_DFSMD_BUFFER_SIZE	128					// Better setting: having buffer of 256 leads to timer interrupts being lost
 //#define STM_DFSMD_BUFFER_SIZE	1024
 //#define STM_DFSMD_BUFFER_SIZE	512
 

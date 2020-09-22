@@ -970,7 +970,7 @@ unsigned char stm_dfsdm_data_getnext(STM_DFSMD_TYPE *buffer,unsigned long *timem
 *******************************************************************************/
 void _stm_dfsdm_data_storenext(int *buffer,unsigned long timems,unsigned char left_right)
 {
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	//ATOMIC_BLOCK(ATOMIC_RESTORESTATE)			// storenext is always called from interrupts; no point deactivating them.
 	{
 		// Check if buffer is full
 		if( ((_stm_dfsmd_buffer_wrptr+1)&STM_DFSMD_BUFFER_MASK) == _stm_dfsmd_buffer_rdptr )

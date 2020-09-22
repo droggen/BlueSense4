@@ -130,6 +130,8 @@ extern unsigned char __mpu_sample_softdivider_ctr,__mpu_sample_softdivider_divid
 void mpu_isr(void);
 void mpu_isr_blocking(void);
 void mpu_isr_partblocking(void);
+void mpu_isr_partpartblocking(void);
+void __mpu_read_status_cb();
 
 
 

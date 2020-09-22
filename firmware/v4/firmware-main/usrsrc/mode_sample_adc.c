@@ -267,7 +267,6 @@ void mode_sample_adc(void)
 	CurrentAnnotation=0;
 	
 	// Initialise ADC with channels and time; round time to multiple of 10uS
-	// stm_adc_acquire_start(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,199,(mode_adc_period/10)-1);		// 20MHz/(199+1)=10uS and period-1 to ensure microseconds
 	stm_adc_acquire_start_us(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,mode_adc_period);
 
 
@@ -278,7 +277,7 @@ void mode_sample_adc(void)
 	{
 		// Depending on the "fastbin" mode either go through the fast "keypress" exit, or the slower command parser.
 		if(mode_adc_fastbin)
-		//if(0)
+		//if(1)
 		{
 			// Keypress to quit - faster than parsing user commands.
 			if(fischar(file_pri))		// Faster than fgetc
@@ -528,7 +527,7 @@ void stream_adc_status(FILE *f,unsigned char bin)
 		// Information text
 		fprintf(f,"# ADC t=%05lu ms; %s",stat_t_cur-stat_timems_start,ltc2942_last_strstatus());
 		fprintf(f,"; wps=%lu",wps);
-		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; sampleerr=%09lu (overrun=%09lu; errsend=%09lu); sr=%04lu",totframes,stat_adc_samplesendok,stat_adc_samplesendfailed+lostframes,lostframes,stat_adc_samplesendfailed,sr);
+		fprintf(f,"; sampletot=%09lu; sampleok=%09lu; samplerr=%09lu (overrun=%09lu; errsend=%09lu); sr=%04lu",totframes,stat_adc_samplesendok,stat_adc_samplesendfailed+lostframes,lostframes,stat_adc_samplesendfailed,sr);
 		_MODE_SAMPLE_STREAM_STATUS_LOGSIZE;
 	}
 // Binary mode not implemented

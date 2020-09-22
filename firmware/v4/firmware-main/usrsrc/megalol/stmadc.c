@@ -377,9 +377,13 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 			continue;
 		sConfig.Channel = bs2stmmap[i];
 		sConfig.Rank = bs2stmrank[rankidx];
-		// sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;			// Highest
+
+		// Assuming realistic (desired) maximum sample rate of 20KHz with 8 channels: conversion time must be < 1/20K/8=6.25uS. ADC clock = 8MHZ -> conversion time < 50 ADC clock
+
+		//sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;			// Highest
+		sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;			// Assuming 8 channels, ADC clock=8MHz -> max sample rate > 21KHz
 		//sConfig.SamplingTime = ADC_SAMPLETIME_92CYCLES_5;
-		sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;			// AHB=32MHz; ADC clock = 8MHz; sample time: 8MHz/247 = 32KHz
+		//sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;			// AHB=32MHz; ADC clock = 8MHz; sample time: 8MHz/247 = 32KHz
 		//sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
 		sConfig.SingleDiff = ADC_SINGLE_ENDED;
 		sConfig.OffsetNumber = ADC_OFFSET_NONE;
@@ -572,7 +576,7 @@ unsigned char stm_adc_data_getnext(unsigned short *buffer,unsigned *nc,unsigned 
 *******************************************************************************/
 void _stm_adc_data_storenext(unsigned short *buffer,unsigned long timems)
 {
-	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+	//ATOMIC_BLOCK(ATOMIC_RESTORESTATE)				// Storenext is always called from an interrupt - no point disabling them
 	{
 		// Check if buffer is full
 		if( ((_stm_adc_buffer_wrptr+1)&STM_ADC_BUFFER_MASK) == _stm_adc_buffer_rdptr )

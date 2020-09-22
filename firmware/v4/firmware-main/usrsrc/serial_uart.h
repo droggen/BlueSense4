@@ -43,7 +43,10 @@ extern volatile unsigned long Serial1EvtWithinInt;
 
 // Circular buffer size
 #define SERIAL_UART_RX_BUFFERSIZE 1024
-#define SERIAL_UART_TX_BUFFERSIZE 2048
+// Should be large enough to hold all the text written in non-blocking mode (e.g. help screen): 2048 is enough.
+// Should also be large enough to handle several putbuf packets when streaming data: e.g. audio frame in ascii can be 256*8bytes
+// Therefore use 8192.
+#define SERIAL_UART_TX_BUFFERSIZE 8192
 
 // DMA buffer size. RTS is toggled when RX buffer level reaches SERIAL_UART_RX_BUFFERSIZE-SERIAL_UART_DMA_RX_BUFFERSIZE.
 // A larger DMA buffer reduces the interrupt load and gives more advance warning to the peripheral to stop transmitting data

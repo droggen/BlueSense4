@@ -10,7 +10,11 @@
 #include "circbuf.h"
 #include "serial.h"
 
-#define USB_BUFFERSIZE 2048
+// Should be large enough to hold all the text written in non-blocking mode (e.g. help screen): 2048 is enough.
+// Should also be large enough to handle several putbuf packets when streaming data: e.g. audio frame in ascii can be 256*8bytes
+// Therefore use 8192.
+#define USB_BUFFERSIZE 8192
+//#define USB_BUFFERSIZE 2048
 //#define USB_BUFFERSIZE 512
 
 extern SERIALPARAM SERIALPARAM_USB;
