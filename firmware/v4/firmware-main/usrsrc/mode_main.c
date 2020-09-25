@@ -143,6 +143,8 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'b', CommandParserBootScript,help_bootscript},
 	{'~', CommandParserClearBootCounter,help_clearbootctr},
 	{'?', CommandParserIdentify,help_identify},
+	{'V',CommandParserVT100,"V[,<en>] Queries the VT100 mode; or enables (en=1) or disables (en=0) it"},
+	{0,0,"---- Development/Test ----"},
 	{'K', CommandParserBenchmark,"Benchmarks"},
 
 #if 1		// Deactivated for the vidoe demo
@@ -161,8 +163,6 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'8',CommandParserRandomWalk,"8,<delay>,<from>,<to>,<jump> Generates a random walk between from and to, jumping by up to jump every delay ms"},
 
 	//{'§',CommandTestPwr,"test prw stuff"},
-	{'V',CommandParserVT100,"V[,<en>] Queries the VT100 mode; or enables (en=1) or disables (en=0) it"},
-
 
 
 	{'-', CommandParserModeSerial,"Serial test mode"},
