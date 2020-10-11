@@ -14,14 +14,18 @@
 
 
 
-void stmdac_init();
+void stmdac_init(unsigned int samplerate,void (*cb)(unsigned short *buffer,unsigned int n));
 void stmdac_deinit();
-int stm_dac_addwaveform(unsigned freq, unsigned vol);
+int stm_dac_cosinegenerator_addwaveform(unsigned freq, unsigned vol);
 void _stm_dac_clearwaveforms();
 void stm_dac_clearstat();
 void stmdac_setval();
 unsigned stmdac_getval();
-void _stm_dac_initwaveforms(unsigned n,...);
+void stm_dac_cosinegenerator_init();
+void stm_dac_cosinegenerator_siggen(unsigned short *buffer,unsigned n);
+#if 0
+void _stm_dac_cosinegenerator_initwaveforms(unsigned n,...);
+#endif
 unsigned _stm_dac_computeincr(unsigned targetfrq,unsigned dacclock,unsigned lutsize);
 unsigned _stm_dac_computefrqfrominc(unsigned increment,unsigned dacclock,unsigned lutsize);
 void _stm_dac_deinit_timer();

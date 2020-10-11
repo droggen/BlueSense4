@@ -40,6 +40,6 @@ void stm_adc_deinit_gpiotoanalog(unsigned char channels);
 void _stm_adc_init_timer(unsigned prescaler,unsigned reload);
 void _stm_adc_deinit_timer();
 unsigned long stm_adc_perfbench_withreadout(unsigned long mintime);
-unsigned _stm_adc_gettimfrq();
+unsigned stm_rcc_get_apb2_timfrq();
 
 #endif /* MEGALOL_STMADC_H_ */

@@ -57,6 +57,7 @@
 #include "mode_sample_multimodal.h"
 #include "mode_dac.h"
 #include "mode_serial.h"
+#include "mode_modulation.h"
 
 #include "system-extra.h"
 
@@ -184,6 +185,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 	{'i', CommandParserInfo,help_info},
 	{'c', CommandParserCallback,help_callback},
+	{'L', CommandParserModeModulation,"Modulation"},
 #endif
 
 };

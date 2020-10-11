@@ -69,7 +69,7 @@ unsigned char CommandParserDACStart(char *buffer,unsigned char size)
 
 	//HAL_StatusTypeDef s = HAL_DAC_Start(&hdac1,DAC_CHANNEL_1);
 	//fprintf(file_pri,"%d\n",s);
-	stmdac_init(0);
+	stmdac_init(0,0);
 
 	return 0;
 }
@@ -144,7 +144,7 @@ unsigned char CommandParserDACSquare(char *buffer,unsigned char size)
 
 	return 0;
 }
-unsigned char CommandParserDACTimer(char *buffer,unsigned char size)
+/*unsigned char CommandParserDACTimer(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 
@@ -153,7 +153,7 @@ unsigned char CommandParserDACTimer(char *buffer,unsigned char size)
 
 
 	return 0;
-}
+}*/
 
 unsigned char CommandParserModeDAC(char *buffer,unsigned char size)
 {
@@ -209,14 +209,19 @@ unsigned char CommandParserModeDAC(char *buffer,unsigned char size)
 	// Clear all waveforms
 	stmdac_deinit();
 
-	// Initialise
-	stmdac_init(sr);
+	// Start generating at the specified sample rate with the built-in cosine generator
+	stmdac_init(sr,stm_dac_cosinegenerator_siggen);
+
+	// Initialise the cosine waveform generator
+	// Note that stmdac_init must be called before, as this stores the sample rate (effective) in internal variables used by the cosine generator to find the phase increment.
+	stm_dac_cosinegenerator_init();
 	for(int i=0;i<(n-1)/2;i++)
 	{
 		fprintf(file_pri,"DAC Waveform %d: frq=%d; vol=%d\n",i,frq[i],vol[i]);
-		if(stm_dac_addwaveform(frq[i],vol[i]))
+		if(stm_dac_cosinegenerator_addwaveform(frq[i],vol[i]))
 			fprintf(file_pri,"Error adding waveform %d.\n",i);
 	}
+
 
 
 

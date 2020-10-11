@@ -11,6 +11,7 @@
 #include "usrmain.h"
 #include "global.h"
 #include "stmadc.h"
+#include "stmrcc.h"
 #include "wait.h"
 #include "stm32l4xx_ll_tim.h"
 #include "serial_itm.h"
@@ -148,7 +149,7 @@ void stm_adc_acquire_start_us(unsigned char channels,unsigned char vbat,unsigned
 
 	// Prescaler: maps from TIM frequency to 10uS period (10uS <> 100KHz).
 
-	int timclk = _stm_adc_gettimfrq();
+	int timclk = stm_rcc_get_apb2_timfrq();
 
 	prescaler = (timclk/100000)-1;			// Subract one as frequency is divided by prescaler+1
 
@@ -188,7 +189,7 @@ void _stm_adc_acquire_start(unsigned char channels,unsigned char vbat,unsigned c
 	fprintf(file_pri,"Channels: %u vbat: %u vref: %u temp: %u Prescaler: %u reload: %u\n",channels,vbat,vref,temp,prescaler,reload);
 
 
-	unsigned timerclock=_stm_adc_gettimfrq();
+	unsigned timerclock=stm_rcc_get_apb2_timfrq();
 	unsigned ips = ips = timerclock/(prescaler+1)/(reload+1);	// Number of interrupt per seconds assuming one interrupt per sample
 
 	fprintf(file_pri,"ADC interrupt/second prior to grouping: %u\n",ips);
@@ -233,25 +234,6 @@ void stm_adc_acquire_stop()
 	stm_adc_deinit();
 }
 
-unsigned _stm_adc_gettimfrq()
-{
-	unsigned timclk;
-	unsigned pclk = HAL_RCC_GetPCLK2Freq();
-	// Get the APB2 timer clock frequency: it is equal to APB2 only if the APB2 prescaler is 1, otherwise it is double.
-	// Get PCLK2 prescaler
-	if((RCC->CFGR & RCC_CFGR_PPRE2) == 0)
-	{
-		// PCLK2 prescaler equal to 1 => TIMCLK = PCLK2
-		timclk = pclk;
-	}
-	else
-	{
-		// PCLK prescaler different from 1 => TIMCLK = 2 * PCLK
-		timclk = 2*pclk;
-	}
-	fprintf(file_pri,"APB2 peripheral clock: %u APB2 timer clock: %u\n",pclk,timclk);
-	return timclk;
-}
 
 /******************************************************************************
 	function: stm_adc_init
@@ -275,7 +257,7 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 
 
 
-	ADC_TypeDef *adc = hadc1.Instance;
+	//ADC_TypeDef *adc = hadc1.Instance;
 
 	const unsigned bs2maxchannel = 8;
 
@@ -289,7 +271,7 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 
 	for(int i=0;i<bs2maxchannel;i++)
 	{
-		fprintf(file_pri,"Channel %d: %08X\n",i,bs2stmmap[i]);
+		fprintf(file_pri,"Channel %d: %08X\n",i,(unsigned)bs2stmmap[i]);
 	}
 
 	channels&=0b11111;			// BlueSense has 5 external ADC inputs
@@ -709,7 +691,7 @@ unsigned char stm_adc_acquirecontinuously(unsigned grouping)
 	if(grouping<1) grouping=1;
 	if(grouping>STM_ADC_MAXGROUPING) grouping=STM_ADC_MAXGROUPING;
 
-	fprintf(file_pri,"Num conv: %d Grouping: %u\n",hadc1.Init.NbrOfConversion,grouping);
+	fprintf(file_pri,"Num conv: %u Grouping: %u\n",(unsigned)hadc1.Init.NbrOfConversion,grouping);
 
 	_stm_adc_grouping = grouping;
 
