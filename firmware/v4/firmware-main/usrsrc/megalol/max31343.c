@@ -129,8 +129,8 @@ unsigned char max31343_init()
 	// RTC_config2:
 	// Default settings are OK. Square wave is always active.
 	// PRW_MGMT: Auto mode is only OK is soft off; however if long press beyond when soft off occurs (through hrst) then time is reset.
-	max31343_writereg(0x18,0x3C);		// Manual mode; selection of VBat; leave PFVT=3 (2.4V) although this is not used in manual mode
-	//max31343_writereg(0x18,0x30);		// Automatic mode; PFVT=3 (2.4V)
+	///max31343_writereg(0x18,0x3C);		// Manual mode; selection of VBat; leave PFVT=3 (2.4V) although this is not used in manual mode		// fixes bug with missing cap
+	max31343_writereg(0x18,0x30);		// Automatic mode; PFVT=3 (2.4V)
 	//max31343_writereg(0x18,0x10);		// Automatic mode; PFVT=1 (1.8V)
 
 	fprintf(file_pri,"\tBoot status: %02X\n",max31341_get_boot_status());

@@ -18,7 +18,7 @@ unsigned int _stm_dac_lut_index[DACMAXWAVEFORMS];		// LUT index in 16.16 format
 unsigned int _stm_dac_lut_incr[DACMAXWAVEFORMS];		// LUT increment in 16.16 format
 unsigned int _stm_dac_waveform_vol[DACMAXWAVEFORMS];	// Volume from 0 to 4095
 unsigned int _stm_dac_dacclock;						// DAC clock in Hz
-unsigned int _stm_dac_numwaveforms;					// Number of simultaneously generated waveforms
+unsigned int _stm_dac_cosinegenerator_numwaveforms;					// Number of simultaneously generated waveforms
 //unsigned int _stm_dac_ampldiv=20;					// Common amplitude divider
 //unsigned int _stm_dac_ampldiv=1;					// Common amplitude divider
 
@@ -186,7 +186,7 @@ unsigned stmdac_getval()
 *******************************************************************************/
 int stm_dac_cosinegenerator_addwaveform(unsigned freq, unsigned vol)
 {
-	if(_stm_dac_numwaveforms>=DACMAXWAVEFORMS)
+	if(_stm_dac_cosinegenerator_numwaveforms>=DACMAXWAVEFORMS)
 		return 1;
 
 	if(freq==0)
@@ -196,12 +196,12 @@ int stm_dac_cosinegenerator_addwaveform(unsigned freq, unsigned vol)
 
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-		_stm_dac_lut_incr[_stm_dac_numwaveforms] = _stm_dac_computeincr(freq,_stm_dac_dacclock,STMDAC_LUTSIZ);
+		_stm_dac_lut_incr[_stm_dac_cosinegenerator_numwaveforms] = _stm_dac_computeincr(freq,_stm_dac_dacclock,STMDAC_LUTSIZ);
 		if(vol>4095)
 			vol = 4095;
-		_stm_dac_waveform_vol[_stm_dac_numwaveforms] = vol;
-		_stm_dac_lut_index[_stm_dac_numwaveforms] = 0;
-		_stm_dac_numwaveforms++;
+		_stm_dac_waveform_vol[_stm_dac_cosinegenerator_numwaveforms] = vol;
+		_stm_dac_lut_index[_stm_dac_cosinegenerator_numwaveforms] = 0;
+		_stm_dac_cosinegenerator_numwaveforms++;
 	}
 	//fprintf(file_pri,"Waveform %d: freq: %u; vol: %u; increment: %u\n",_stm_dac_numwaveforms-1,freq,vol,_stm_dac_lut_incr[_stm_dac_numwaveforms-1]);
 
@@ -221,7 +221,7 @@ void stm_dac_cosinegenerator_init()
 	{
 		//for(unsigned i=0;i<n;i++)
 //			buffer[i]=0;
-		_stm_dac_numwaveforms=0;
+		_stm_dac_cosinegenerator_numwaveforms=0;
 	}
 }
 
@@ -272,7 +272,7 @@ void stm_dac_cosinegenerator_siggen(unsigned short *buffer,unsigned n)
 	for(unsigned i=0;i<n;i++)
 	{
 		buffer[i] = 0;
-		for(int w=0;w<_stm_dac_numwaveforms;w++)
+		for(int w=0;w<_stm_dac_cosinegenerator_numwaveforms;w++)
 		{
 			unsigned int s = _stm_dac_cos_lut[_stm_dac_lut_index[w]>>16];		// Index is in 16.16 format
 			s=(s*_stm_dac_waveform_vol[w])>>12;									// Volume is 0..4096 inclusive
