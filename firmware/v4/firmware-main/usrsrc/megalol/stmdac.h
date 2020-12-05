@@ -11,7 +11,7 @@
 //#define DACDMAHALFBUFSIZ	256
 #define DACDMAHALFBUFSIZ	128						// Works up to at least 250KHz/1waveform.
 
-extern const unsigned short _stm_dac_cos_lut[];
+extern unsigned short _stm_dac_cos_lut[];
 extern unsigned short _stm_dac_dmabuf[];			// DMA tempory buffer - DMA uses double buffering so buffer twice the size of DACDMABUFSIZ
 
 extern unsigned int _stm_dac_dacclock;				// DAC clock in Hz
