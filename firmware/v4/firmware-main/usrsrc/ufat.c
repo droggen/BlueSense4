@@ -19,6 +19,35 @@
 #include "global.h"
 #include "sd/stm_sdio.h"
 
+/*
+	file: ufat
+
+	File logging functions. This module provides compatibility with BlueSense2, which
+	used a microFAT filesystem. Instead, the FAT module by Chan is used.
+
+	* Principles *
+
+	The SD card remains unmounted whenever possible in order to allow the user to remove the card whenever it is unused.
+
+	Most functions do initialise the SD interface, the FAT filesystem, perform the operation, and unmount the filesystem afterwards.
+
+	* State variables *
+	There is some redundency between state variables of ufat and state variables of FatFS, which could be optimized away in the future.
+
+	TODO: the state variable Stat should be updated when the card is removed/inserted. Currently only card_isinitialised is modified.
+
+	ufat state variables:
+		_fsinfo.card_isinitialised:		Indicates if the SD card low-level interface is initialised (i.e. card present and comm to card ok). Set if stm_sdm_init() is successful. Unset when card is unplugged.
+		_fsinfo.fs_available:			Indicates that a filesystem is available, i.e. card is formatted.
+
+	FatFS state variables (incomplete):
+		Stat (FATFS/Target/sd_diskio.c):	Returned by disk_status and indicates whether not initialized, no disk and read-only.
+
+
+*/
+
+
+
 FATFS __fs;           // Filesystem object
 //BYTE __fs_work[FF_MAX_SS]; // Work area (larger is better for processing time)
 BYTE __fs_work[1000]; // Work area (larger is better for processing time)
@@ -68,6 +97,10 @@ unsigned char _ufat_mount()
 			_fsinfo.card_isinitialised=0;
 	}
 
+	// This is required to force FatFS to check whether the SD card is available and update it's internal state variables (incl. Stat).
+	DSTATUS st=disk_status(0);
+	(void)st;
+
 
 	// Register the file system object
 	// Register work area
@@ -77,7 +110,6 @@ unsigned char _ufat_mount()
 		return 1;
 	}
 
-	_fsinfo.card_isinitialised=1;
 
 	return 0;
 }
@@ -85,6 +117,8 @@ unsigned char _ufat_mount()
 unsigned char _ufat_unmount()
 {
 	FRESULT res;        // API result code
+
+	_fsinfo.fs_available=0;
 	// Unregister work area
 	if((res=f_mount(0, "", 0))!=FR_OK)
 	{
@@ -92,7 +126,7 @@ unsigned char _ufat_unmount()
 		return 1;
 	}
 
-	_fsinfo.fs_available=0;
+
 
 	return 0;
 }
@@ -125,29 +159,24 @@ unsigned char _ufat_unmount()
 ******************************************************************************/
 unsigned char ufat_format(unsigned char numlogfile)
 {
-	unsigned char rv;
 	FRESULT res;        // API result code
 
 	unsigned t1,t2;
 
-	// Check if a log file is open
+	// Sanity check 1: Check if a log file is open
 	if(_fsinfo.file_current_log_file)
 	{
 		fprintf(file_pri,"Log file open - cannot format\n");
 		return 1;
 	}
 
-
-	// Sanity check of parameter value
+	// Sanity check 2: Sanity check of parameter value
 	if(numlogfile<1)
 		numlogfile=1;
 	if(numlogfile>_UFAT_NUMLOGENTRY)
 		numlogfile=_UFAT_NUMLOGENTRY;
 
-
-	// Unmount
-	fprintf(file_pri,"\tUnmounting filesystem\n");
-	_ufat_unmount();
+	// Unmount/mount
 	_ufat_mount();
 
 	fprintf(file_pri,"\tFormatting...\n");
@@ -171,7 +200,6 @@ unsigned char ufat_format_partial(unsigned char numlogfile)
 {
 	FIL fil;            // File object
 	FRESULT res;        // API result code
-	UINT bw;            // Bytes written
 
 	// Mount the filesystem
 	if(_ufat_mountcheck())
@@ -196,7 +224,7 @@ unsigned char ufat_format_partial(unsigned char numlogfile)
 	fre_sect = fre_clust * fs->csize;			// Available space in sector
 
 	// Print the free space (assuming 512 bytes/sector)
-	fprintf(file_pri,"Card capacity: %luKB (clusters: %u). Available: %luKB (clusters: %u). Sectors per clusters: %u\n", tot_sect / 2, fs->n_fatent-2,fre_sect / 2,fre_clust,fs->csize);
+	fprintf(file_pri,"Card capacity: %luKB (clusters: %lu). Available: %luKB (clusters: %lu). Sectors per clusters: %u\n", tot_sect / 2, fs->n_fatent-2,fre_sect / 2,fre_clust,fs->csize);
 
 
 	// Make sure we have enough log files not to have logs larger than 4GB. (fre_sect/2) is space in KB.
@@ -221,7 +249,7 @@ unsigned char ufat_format_partial(unsigned char numlogfile)
 
 	//fprintf(file_pri,"logsizebytes: %lu\n",_fsinfo.logsizebytes);
 
-	fprintf(file_pri,"Max expected log size for pre-allocation: %luMB\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"Max expected log size for pre-allocation: %lluMB\n",_fsinfo.logsizebytes>>20);
 
 
 	// Create empty log files
@@ -229,7 +257,7 @@ unsigned char ufat_format_partial(unsigned char numlogfile)
 	for(unsigned l=0;l<numlogfile;l++)
 	{
 		char fn[64];
-		_ufat_lognumtoname(l,fn);
+		_ufat_lognumtoname(l,(unsigned char *)fn);
 
 
 		// time
@@ -278,7 +306,7 @@ void _ufat_estimatecardspace(int numlogfile)
 	fre_sect = fre_clust * fs->csize;			// Available space in sector
 
 	// Print the free space (assuming 512 bytes/sector)
-	fprintf(file_pri,"\tCard capacity: %luKB (clusters: %u). Available: %luKB (clusters: %u). Sectors per clusters: %u\n", tot_sect / 2, fs->n_fatent-2,fre_sect / 2,fre_clust,fs->csize);
+	fprintf(file_pri,"\tCard capacity: %luKB (clusters: %lu). Available: %luKB (clusters: %lu). Sectors per clusters: %u\n", tot_sect / 2, fs->n_fatent-2,fre_sect / 2,fre_clust,fs->csize);
 
 
 	// Compute the max log file size assuming equal sized logs and a 10% space reserved for other files
@@ -292,7 +320,7 @@ void _ufat_estimatecardspace(int numlogfile)
 
 	//fprintf(file_pri,"logsizebytes: %lu\n",_fsinfo.logsizebytes);
 
-	fprintf(file_pri,"\tMax expected log size for pre-allocation: %luMB\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"\tMax expected log size for pre-allocation: %lluMB\n",_fsinfo.logsizebytes>>20);
 
 }
 
@@ -322,10 +350,8 @@ void _ufat_estimatecardspace(int numlogfile)
 ******************************************************************************/
 unsigned char _ufat_init_fs(void)
 {
-	unsigned char rv;
-
 	// The filesystem is not available yet
-	//_fsinfo.fs_available=0;
+	_fsinfo.fs_available=0;
 
 	// Find how many log files are available
 
@@ -338,7 +364,7 @@ unsigned char _ufat_init_fs(void)
 		// See if file available
 		FRESULT res;
 		FILINFO finfo;
-		if( (res=f_stat(fn,&finfo)) != FR_OK)
+		if( (res=f_stat((char*)fn,&finfo)) != FR_OK)
 		{
 			break;
 		}
@@ -365,12 +391,12 @@ void _ufat_lognumtoname(unsigned char n,unsigned char *name)
 {
 	// File name
 	#if UFAT_INCLUDENODENAME==1
-		sprintf(name,"LOG-%s",system_getdevicename());
+		sprintf((char*)name,"LOG-%s",system_getdevicename());
 	#else
-		strcpy(name,"LOG-0000");
+		strcpy((char*)name,"LOG-0000");
 	#endif
 	// Extension
-	sprintf(&name[strlen(name)],".%03u",n);
+	sprintf((char*)&name[strlen((char*)name)],".%03u",n);
 }
 /******************************************************************************
 	function: ufat_log_open
@@ -418,9 +444,7 @@ FILE *ufat_log_open(unsigned char n)
 
 	// File name
 	char fn[64];
-	_ufat_lognumtoname(n,fn);
-
-
+	_ufat_lognumtoname(n,(unsigned char *)fn);
 
 	fprintf(file_pri,"Opening log %s\n",fn);
 	FRESULT res = f_open(&_fsinfo.file_current_log, fn, FA_CREATE_ALWAYS | FA_WRITE);
@@ -431,11 +455,11 @@ FILE *ufat_log_open(unsigned char n)
 	}
 
 	// Preallocate
-	fprintf(file_pri,"Preallocating %uMB of contiguous space\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"Preallocating %lluMB of contiguous space\n",_fsinfo.logsizebytes>>20);
 	res = f_expand (&_fsinfo.file_current_log,_fsinfo.logsizebytes,0);
 	if(res!=FR_OK)
 	{
-		fprintf(file_pri,"Cannot allocate continuous %uMB - continuing without continuous space\n",_fsinfo.logsizebytes>>20);
+		fprintf(file_pri,"Cannot allocate continuous %lluMB - continuing without continuous space\n",_fsinfo.logsizebytes>>20);
 	}
 
 	// Initialise a FILE structure for writing using
@@ -517,7 +541,7 @@ FILE *ufat_log_open_read(unsigned char n)
 
 	// File name
 	char fn[64];
-	_ufat_lognumtoname(n,fn);
+	_ufat_lognumtoname(n,(unsigned char *)fn);
 
 	fprintf(file_pri,"Opening log %s\n",fn);
 	FRESULT res = f_open(&_fsinfo.file_current_log, fn, FA_OPEN_ALWAYS|FA_READ);
@@ -831,7 +855,15 @@ int ufat_listfiles()
 
 	return 0;
 }
+/******************************************************************************
+	function: _ufat_mountcheck
+*******************************************************************************
 
+	Parameters:
+		-
+	Returns:
+		-
+******************************************************************************/
 unsigned char _ufat_mountcheck()
 {
 	if(_ufat_mount())
@@ -850,9 +882,20 @@ unsigned char ufat_initcheck()
 	}
 	return 0;
 }
-/*
-	Call this from an interrupt to notify SD card insertion has changed
- */
+/******************************************************************************
+	function: ufat_notifysdcardchange
+*******************************************************************************
+	Call this from an interrupt to notify SD card insertion has changed.
+
+	This function flags the filesystem as unmounted/uninitialised, so that
+	follow-up ufat functions call the low-level SD initialisation and FAT
+	initialisation.
+
+	Parameters:
+		sddetect	-		Whether the card is now inserted or not.
+	Returns:
+		-
+******************************************************************************/
 void ufat_notifysdcardchange(unsigned char sddetect)
 {
 	// Regardless of new SD status, flag as "unmounted"

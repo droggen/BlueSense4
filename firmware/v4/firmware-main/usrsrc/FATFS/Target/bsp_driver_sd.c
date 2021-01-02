@@ -17,10 +17,10 @@ extern SD_HandleTypeDef hsd1;
 ******************************************************************************/
 uint8_t BSP_SD_Init(void)
 {
+	//fprintf(file_pri,"BSP_SD_Init\n");
+	return 0;		// Dan: ufat_init does this
 
-	return 0;		// ufat_init does this
 
-	fprintf(file_pri,"BSP_SD_Init\n");
 	/* Check if the SD card is plugged in the slot */
 	if (BSP_SD_IsDetected() != SD_PRESENT)
 	{
