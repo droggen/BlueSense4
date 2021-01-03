@@ -635,17 +635,87 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	
 	// Check if discrepancy between desired and target params
 	char config = 0;
-	if(p_srvclass != srvclass) config = 1;
-	if(p_devclass != devclass) config = 1;
-	if(p_cfgtimer != cfgtimer) config = 1;
-	if(p_mode != mode) config = 1;
-	if(p_auth != auth) config = 1;
-	if(p_inqw != inqw) config = 1;
-	if(p_pagw != pagw) config = 1;
-	if(p_sniff != sniff) config = 1;
-	if(p_lowpower != lowpower) config = 1;
-	if(strcmp(p_pin,pin)!=0) config = 1;
-	if(strncmp(p_name,name,strlen(p_name))!=0 || strlen(name)!=strlen(p_name)+5) config = 1;			// If the name does not start by p_name followed by 5 characters (-xxxx) then reconfig
+	if(p_srvclass != srvclass)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid srvclass\n");
+#endif
+	}
+	if(p_devclass != devclass)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid devclass\n");
+#endif
+
+	}
+	if(p_cfgtimer != cfgtimer)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid cfgtimer\n");
+#endif
+
+	}
+	if(p_mode != mode)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid mode\n");
+#endif
+
+	}
+	if(p_auth != auth)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid auth\n");
+#endif
+
+	}
+	if(p_inqw != inqw)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid inqw\n");
+#endif
+	}
+	if(p_pagw != pagw)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid pagw\n");
+#endif
+	}
+	if(p_sniff != sniff)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid sniff\n");
+#endif
+	}
+	if(p_lowpower != lowpower)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid lowpower\n");
+#endif
+	}
+	if(strcmp(p_pin,pin)!=0)
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid pin\n");
+#endif
+	}
+	if(strncmp(p_name,name,strlen(p_name))!=0 || strlen(name)!=strlen(p_name)+5)	// If the name does not start by p_name followed by 5 characters (-xxxx) then reconfig
+	{
+		config = 1;
+#if RN41DEBUG==1
+		fprintf(file,"Invalid name\n");
+#endif
+	}
 	
 	if(config==1)
 	{
@@ -693,13 +763,8 @@ void rn41_Setup(FILE *file,FILE *filebt,unsigned char *devname)
 	// Copy the device name
 	if(devname)
 	{
-		fprintf(file,"Copy dev name\n");
-		HAL_Delay(100);
 		for(int i=0;i<4;i++) devname[i] = name[strlen(p_name)+1+i];
 		devname[4]=0;
-
-		fprintf(file,"Copy dev name done\n");
-		HAL_Delay(100);
 	}
 	
 	//printf("Set pass data in cmd mode\n");
