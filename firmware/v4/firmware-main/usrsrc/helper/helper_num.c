@@ -24,7 +24,75 @@ number + one trailing null).
 	Returns:
 		-
 *******************************************************************************/
-void u32toa(unsigned v,unsigned char *ptr)
+void u32toa_div1(unsigned v,unsigned char *ptr)
+{
+	char buf[16];
+	utoa(v,buf,10);
+	int l = strlen(buf);
+	// Shift the number so that the rightmost digit is at ptr[9]
+	for(unsigned i=0;i<l;i++)
+	{
+		ptr[10-l+i] = buf[i];
+	}
+	for(unsigned i=0;i<10-l;i++)
+		ptr[i]='0';
+	ptr[10]=0;
+}
+void u32toa_div2(unsigned v,unsigned char *ptr)
+{
+	unsigned d = 1000000000;
+	unsigned n;
+
+	for(int i=0;i<10;i++)
+	{
+		n = v/d;
+		v=v-d*n;
+		d=d/10;
+		ptr[i]='0'+n;
+	}
+	ptr[10]=0;
+}
+void u32toa_div3(unsigned v,unsigned char *ptr)
+{
+	unsigned d[10] = {1000000000,100000000,10000000,1000000,100000,10000,1000,100,10,1};
+	unsigned n;
+
+	for(int i=0;i<10;i++)
+	{
+		n = v/d[i];
+		v=v-d[i]*n;
+		ptr[i]='0'+n;
+	}
+	ptr[10]=0;
+}
+unsigned __d[10] = {1000000000,100000000,10000000,1000000,100000,10000,1000,100,10,1};
+void u32toa_div4(unsigned v,unsigned char *ptr)
+{
+	unsigned n;
+
+	for(int i=0;i<10;i++)
+	{
+		n = v/__d[i];
+		v=v-__d[i]*n;
+		ptr[i]='0'+n;
+	}
+	ptr[10]=0;
+}
+void u32toa_div5(unsigned v,unsigned char *ptr)
+{
+	unsigned n;
+
+	for(int i=0;i<9;i++)
+	{
+		n = v/__d[i];
+		v=v-__d[i]*n;
+		ptr[i]='0'+n;
+	}
+	ptr[9] = '0'+v;
+	ptr[10]=0;
+}
+
+void u32toa_sub(unsigned v,unsigned char *ptr)
 {
 	unsigned char r;
 	unsigned long long vo;
@@ -184,7 +252,22 @@ number + one trailing null).
 	Returns:
 		-
 *******************************************************************************/
-void u16toa(unsigned short v,unsigned char *ptr)
+unsigned ___d[10] = {10000,1000,100,10,1};
+void u16toa_div5(unsigned short v,unsigned char *ptr)
+{
+	unsigned n;
+	//unsigned *___d = __d+5; // Get the correct divider table
+
+	for(int i=0;i<4;i++)
+	{
+		n = v/___d[i];
+		v=v-___d[i]*n;
+		ptr[i]='0'+n;
+	}
+	ptr[4] = '0'+v;
+	ptr[5]=0;
+}
+void u16toa_sub(unsigned short v,unsigned char *ptr)
 {
 	unsigned char *ptro = ptr;
 	unsigned char r;
