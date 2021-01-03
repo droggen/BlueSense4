@@ -180,8 +180,12 @@ unsigned char CommandGet(const COMMANDPARSER *CommandParsers,unsigned char Comma
 {
 	unsigned char rv;
 	short c;
-	unsigned char quote=0;			// Indicates whether we are in a quotation mode, where the semicolon separator is not used to separate commands
+	static unsigned char quote=0;			// Indicates whether we are in a quotation mode, where the semicolon separator is not used to separate commands
 	
+	// Fast path: check if any key
+	//if(!fischar(file_pri))
+		//return 0;
+
 	// If connected to a primary source, read that source until the source is empty or the command buffer is full
 	// CommandBufferPtr indicates how many bytes are in the command buffer. The code below limits this to maximum COMMANDMAXSIZE.
 	if(file_pri)
@@ -211,7 +215,7 @@ unsigned char CommandGet(const COMMANDPARSER *CommandParsers,unsigned char Comma
 			memmove(&CommandBuffer[i],&CommandBuffer[i+1],COMMANDMAXSIZE-1-i);			// Shift left by 1
 			CommandBufferPtr--;															// Decrease size of string by 1
 			// Decrease index by one, so that the loop processes the new character that moved in the current index.
-			i--;					
+			i--;
 			//_CommandPrint();		// Debug
 			continue;
 		}
