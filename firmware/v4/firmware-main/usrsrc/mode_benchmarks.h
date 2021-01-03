@@ -18,6 +18,7 @@ unsigned char CommandParserBenchmarkCPUMem(char *buffer,unsigned char size);
 unsigned char CommandParserBenchUSB(char *buffer,unsigned char size);
 unsigned char CommandParserBenchBT(char *buffer,unsigned char size);
 unsigned char CommandParserBenchITM(char *buffer,unsigned char size);
+unsigned char CommandParserBenchFile(char *buffer,unsigned char size);
 
 unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size);
 unsigned char CommandParserIntfBuf(char *buffer,unsigned char size);
@@ -35,6 +36,8 @@ unsigned char CommandParserBenchmarkFlush(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkLatency(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkPerf(char *buffer,unsigned char size);
 unsigned char CommandParserBenchmarkTimer(char *buffer,unsigned char size);
+unsigned char CommandParserBenchmarkTimer2(char *buffer,unsigned char size);
+unsigned char CommandParserBenchmarkNumberConversion(char *buffer,unsigned char size);
 void benchmark_interface(FILE *fbench,FILE *finfo);
 
 #endif /* MODE_BENCHMARKS_H_ */

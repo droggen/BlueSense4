@@ -58,6 +58,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'U', CommandParserBenchUSB,help_benchusb},
 	{'B', CommandParserBenchBT,help_benchbt},
 	{'I', CommandParserBenchITM,help_benchitm},
+	{'F', CommandParserBenchFile,"Benchmark file write"},
 	{'W',CommandParserIntfWriteBench,"W,intf,ns,m Test write speed during ns seconds on intf (0=USB, 1=bluetooth) with method m (0=fputs, 1=putfbuf)"},
 	{'b',CommandParserIntfBuf,"B,intf,buf,type sets the buffer size to buf for intf (0=USB, 1=bluetooth). buf=0 is no buffering, otherwise line buffered"},
 	{'S',CommandParserIntfStatus,"Show interface status until keypress"},
@@ -72,6 +73,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{0,0,"---- Power ----"},
 	{'p',CommandParserBenchmarkPower,"Power consumption"},
 	{0,0,"---- various benchmarks ----"},
+	{'N',CommandParserBenchmarkNumberConversion,"Number conversion"},
 	{'f',CommandParserFlush,"Flush"},
 	{'d',CommandParserDump,"Dump to itm"},
 	{'i',CommandParserInt,"Interrupt tests"},
@@ -80,6 +82,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'X',CommandParserBenchmarkFlush,"Benchmark fflush"},
 	{'x',CommandParserBenchmarkLatency,"Benchmark write to display latency"},
 	{'t',CommandParserBenchmarkTimer,"Timer"},
+	{'9',CommandParserBenchmarkTimer2,"timer_us_get"},
 };
 unsigned char CommandParsersBenchmarksNum=sizeof(CommandParsersBenchmarks)/sizeof(COMMANDPARSER);
 
@@ -197,6 +200,32 @@ unsigned char CommandParserBenchITM(char *buffer,unsigned char size)
 {
 	(void)buffer; (void)size;
 	benchmark_interface(file_itm,file_pri);
+	return 0;
+}
+unsigned char CommandParserBenchFile(char *buffer,unsigned char size)
+{
+	(void)buffer; (void)size;
+
+
+	// Open file
+	unsigned log = ufat_log_getnumlogs();
+	if(log==0)
+	{
+		fprintf(file_pri,"No log files available, check SD card\n");
+		return 1;
+	}
+	log=log/2;							// Open the mid-log: log0 may be in the fast part of the SD card.
+	FILE *flog = ufat_log_open(log);
+	if(flog==0)
+	{
+		fprintf(file_pri,"Can't open log file, check SD card\n");
+		return 1;
+	}
+	fprintf(file_pri,"Benchmarking write to log %d\n",log);
+	benchmark_interface(flog,file_pri);
+
+	ufat_log_close();
+
 	return 0;
 }
 
@@ -903,3 +932,212 @@ unsigned char CommandParserBenchmarkTimer(char *buffer,unsigned char size)
 	}
 	return 0;
 }
+unsigned char CommandParserBenchmarkTimer2(char *buffer,unsigned char size)
+{
+	for(int i=0;i<10;i++)
+	{
+		fprintf(file_pri,"%lu\n",timer_us_get());
+		//HAL_Delay(50);
+	}
+	return 0;
+}
+
+unsigned char CommandParserBenchmarkNumberConversion(char *buffer,unsigned char size)
+{
+	volatile char buf[256];
+	unsigned long int t_last,t_cur;
+	unsigned long tint1,tint2;
+	unsigned nit=0;
+	unsigned benchtime=2;
+	unsigned long pktsample=1234567890;
+	unsigned long timesample=1876543210;
+	unsigned numchannels=1;
+	unsigned short data[1]={23456};
+
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_sub(pktsample,buf);
+		u32toa_sub(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//itoa(pktsample,buf,10);
+		itoa(nit,buf,10);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"itoa Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//utoa(pktsample,buf,10);
+		utoa(nit,buf,10);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"utoa Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div1(pktsample,buf);
+		u32toa_div1(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div1 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div2(pktsample,buf);
+		u32toa_div2(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div2 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div3(pktsample,buf);
+		u32toa_div3(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div3 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div4(pktsample,buf);
+		u32toa_div4(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div4 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div5(pktsample,buf);
+		u32toa_div5(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div5 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+
+	unsigned nums[]={123, 3000000000,4000000000,1000000,32767,1,0};
+
+	for(int i=0;i<sizeof(nums)/sizeof(unsigned);i++)
+	{
+		utoa(nums[i],buf,10);
+		fprintf(file_pri,"utoa of %u: '%s'\n",nums[i],buf);
+
+		u32toa_div1(nums[i],buf);
+		fprintf(file_pri,"u32toa_div1 of %u: '%s'\n",nums[i],buf);
+
+		u32toa_div2(nums[i],buf);
+		fprintf(file_pri,"u32toa_div2 of %u: '%s'\n",nums[i],buf);
+
+		u32toa_div5(nums[i],buf);
+		fprintf(file_pri,"u32toa_div5 of %u: '%s'\n",nums[i],buf);
+
+	}
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u16toa_sub(pktsample,buf);
+		u16toa_sub(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u16toa_sub Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//utoa(pktsample,buf,10);
+		utoa(nit,buf,10);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"utoa Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u16toa_div5(pktsample,buf);
+		u16toa_div5(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u16toa_div5 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+
+	unsigned nums2[]={123, 32767,65535};
+
+	for(int i=0;i<sizeof(nums2)/sizeof(unsigned);i++)
+	{
+		u16toa_div5(nums2[i],buf);
+		fprintf(file_pri,"u16toa_div5 of %u: '%s'\n",nums2[i],buf);
+
+	}
+
+
+}
+
