@@ -16,7 +16,7 @@
 #include "stm32l4xx_ll_tim.h"
 #include "serial_itm.h"
 
-unsigned char _stm_adc_buffer_rdptr,_stm_adc_buffer_wrptr;
+unsigned short _stm_adc_buffer_rdptr,_stm_adc_buffer_wrptr;
 
 //
 #define DMABUFSIZ STM_ADC_MAXCHANNEL*STM_ADC_MAXGROUPING*2						// We sample up to STM_ADC_MAXGROUPING times, before triggering an interrupt
@@ -147,16 +147,16 @@ void stm_adc_acquire_start_us(unsigned char channels,unsigned char vbat,unsigned
 	// Calculate the prescaler and divider
 	unsigned prescaler;
 
-	// Prescaler: maps from TIM frequency to 10uS period (10uS <> 100KHz).
+	// Prescaler: maps from TIM frequency to 5uS period (5uS <> 200KHz).
 
 	int timclk = stm_rcc_get_apb2_timfrq();
 
-	prescaler = (timclk/100000)-1;			// Subract one as frequency is divided by prescaler+1
+	prescaler = (timclk/200000)-1;			// Subract one as frequency is divided by prescaler+1
 
 	int divider;
 	// Calculates divider, rouding to lower values;
-	divider = (periodus/10)-1;				// Subtract one as frequency is divided by divider+1
-	if(divider<0) divider=0;				// Minimum divider is 0 (10uS sample period)
+	divider = (periodus/5)-1;				// Subtract one as frequency is divided by divider+1
+	if(divider<0) divider=0;				// Minimum divider is 0 (5uS sample period)
 
 	_stm_adc_acquire_start(channels,vbat,vref,temp,prescaler,divider);
 
@@ -590,7 +590,7 @@ void _stm_adc_data_storenext(unsigned short *buffer,unsigned long timems)
 *******************************************************************************
 	Returns how many audio frames are in the buffer.
 *******************************************************************************/
-unsigned char stm_adc_data_level(void)
+unsigned short stm_adc_data_level(void)
 {
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
