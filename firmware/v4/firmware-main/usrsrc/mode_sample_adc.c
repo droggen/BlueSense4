@@ -31,6 +31,7 @@
 #include "mode_sample_adc.h"
 #include "commandset.h"
 #include "ltc2942.h"
+#include "helper_num.h"
 
 /*
 	File: mode_sample_adc
@@ -144,19 +145,20 @@ unsigned char mode_sample_adc_checkmask()
 ******************************************************************************/
 unsigned char mode_sample_adc_period()
 {
-	if(mode_adc_period<50 || mode_adc_period>500000)
+	if(mode_adc_period<20 || mode_adc_period>500000)
 	{
-		fprintf(file_pri,"Invalid period: should be in range [50uS;0.5s]\n");
+		fprintf(file_pri,"Invalid period: should be in range [20uS;0.5s]\n");
 		return 2;
 	}
-	// Round period to multiple of 10uS
-	if(mode_adc_period%10)
+	// Round period to multiple of 5uS
+	if(mode_adc_period%5)
 	{
-		mode_adc_period=(mode_adc_period/10)*10;
+		mode_adc_period=(mode_adc_period/5)*5;
 		fprintf(file_pri,"Period rounded to %u\n",mode_adc_period);
 	}
 	return 0;
 }
+
 
 /******************************************************************************
 	function: CommandParserADC
@@ -202,21 +204,24 @@ unsigned char CommandParserADC(char *buffer,unsigned char size)
 				return 2;
 			break;
 	}
+#if 0
+	// Enable ADC bench code
+	if(mode_adc_mask==0)
+	{
+		mode_sample_adc_bench();
+		return 0;
+	}
+#endif
 
 	if(mode_sample_adc_checkmask())
 		return 2;
 
-	if(mode_sample_adc_period())
+	if(mode_sample_adc_period())			// Check period range and round to 5uS
 		return 2;
 
 	if(mode_adc_fastbin>2) mode_adc_fastbin=2;		// fastbin is 0, 1 or 2.
-	// Round period to multiple of 10uS
-	if(mode_adc_period%10)
-	{
-		mode_adc_period=(mode_adc_period/10)*10;
-		fprintf(file_pri,"Period rounded to %u\n",mode_adc_period);
-	}
 	
+
 	fprintf(file_pri,"Sampling ADC: channel mask: %02X; period: %u; fastbin: %u; logfile: %d; duration: %d\n",mode_adc_mask,mode_adc_period,mode_adc_fastbin,mode_sample_param_logfile,mode_sample_param_duration);
 		
 	
@@ -238,6 +243,8 @@ unsigned char CommandParserADC(char *buffer,unsigned char size)
 	sample/stream loop.
 	
 ******************************************************************************/
+/*unsigned long tit[512],titl[512],titl2[512];
+unsigned short titc=0;*/
 void mode_sample_adc(void)
 {
 	unsigned short data[STM_ADC_MAXCHANNEL];		// Buffer to hold a copy of ADC data
@@ -266,15 +273,31 @@ void mode_sample_adc(void)
 	// Update the current annotation
 	CurrentAnnotation=0;
 	
+	// Send data to primary stream or to log if available
+	FILE *file_stream;
+	if(mode_sample_file_log)
+		file_stream=mode_sample_file_log;
+	else
+		file_stream=file_pri;
+
+
+	/*for(int i=0;i<512;i++)
+		tit[i]=titl[i]=titl2[i]=0;
+	titc=0;*/
+	unsigned long ts1 = timer_s_wait();
+
+
+
 	// Initialise ADC with channels and time; round time to multiple of 10uS
 	stm_adc_acquire_start_us(mode_adc_mask&0b11111,(mode_adc_mask>>5)&1,(mode_adc_mask>>6)&1,(mode_adc_mask>>7)&1,mode_adc_period);
 
 
 	// Clear statistics and initialise timers.
 	mode_sample_clearstat();
-
 	while(!CommandShouldQuit())
 	{
+		//unsigned long tus1 = timer_us_get();
+
 		// Depending on the "fastbin" mode either go through the fast "keypress" exit, or the slower command parser.
 		if(mode_adc_fastbin)
 		//if(1)
@@ -289,12 +312,6 @@ void mode_sample_adc(void)
 			while(CommandProcess(CommandParsersADC,CommandParsersADCNum));
 		}
 
-		// Send data to primary stream or to log if available
-		FILE *file_stream;
-		if(mode_sample_file_log)
-			file_stream=mode_sample_file_log;
-		else
-			file_stream=file_pri;
 
 		stat_t_cur=timer_ms_get();						// Current time
 		_MODE_SAMPLE_CHECK_DURATION_BREAK;				// Stop after duration, if specified
@@ -313,44 +330,70 @@ void mode_sample_adc(void)
 		
 		// Acquire and send data if available
 		_MODE_SAMPLE_ADC_GET_AND_SEND;
-		/*{
-			unsigned level = stm_adc_data_level();
-			unsigned numchannels;
-			unsigned long pktsample,timesample;
-			for(unsigned li=0;li<level;li++)
-			{
-				if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
-				{
-					switch(mode_adc_fastbin)
-					{
-						case 1:
-							putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
-							break;
-						case 2:
-							putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);
-							break;
-						case 0:
-						default:
-							putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);
-					}
-					if(putbufrv)
-						stat_adc_samplesendfailed++;
-					else
-						stat_adc_samplesendok++;
-				}
-				else
-					break;
-			}
+		/*unsigned level = stm_adc_data_level();
+		unsigned numchannels;
+		unsigned long pktsample,timesample;
+		//static unsigned char c=0;
+		//c++;
+		//if(c==0)
+			//fprintf(file_pri,"%d\n",level);
+		for(unsigned li=0;li<level;li++)
+		{
+			stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample);
+			stat_adc_samplesendok++;
 		}*/
 
+
+
+		/*unsigned level = stm_adc_data_level();
+		unsigned numchannels;
+		unsigned long pktsample,timesample;
+		for(unsigned li=0;li<level;li++)
+		{
+			if(!stm_adc_data_getnext(data,&numchannels,&timesample,&pktsample))
+			{
+				switch(mode_adc_fastbin)
+				{
+					case 1:
+						putbufrv = mode_sample_adc_streamfastbin(file_stream,numchannels,data);
+						break;
+					case 2:
+						putbufrv = mode_sample_adc_streamfastbin16(file_stream,numchannels,data);
+						break;
+					case 0:
+					default:
+						putbufrv = mode_sample_adc_stream(file_stream,pktsample,timesample,numchannels,data);
+				}
+				if(putbufrv)
+					stat_adc_samplesendfailed++;
+				else
+					stat_adc_samplesendok++;
+			}
+			else
+				break;
+		}*/
+
+		//unsigned level2 = stm_adc_data_level();
+
+
+
+
+		/*unsigned long tus2 = timer_us_get();
+		tit[titc] = tus2-tus1;
+		titl[titc] = level;
+		titl2[titc] = level2;
+		titc=(titc+1)&511;*/
+		//fprintf(file_pri,"%d\n",titc);
 
 		// Sleep
 		_MODE_SAMPLE_SLEEP;
 	} // End sample loop
+	unsigned long ts2 = timer_s_get();
 	stat_timems_end = timer_ms_get();
-	
+
 	// Stop sampling
 	stm_adc_acquire_stop();
+
 
 	// Break to let terminal recover
 	HAL_Delay(100);
@@ -362,7 +405,18 @@ void mode_sample_adc(void)
 	system_led_off(LED_GREEN);
 
 	// Print statistics
+
+
+	fprintf(file_pri,"Time in s: %lu\n",ts2-ts1);
+	/*for(int i=0;i<512;i++)
+		fprintf(file_pri,"%lu %lu %lu\n",tit[i],titl[i],titl2[i]);
+	fprintf(file_pri,"\n");*/
+
+
+
 	stream_adc_status(file_pri,0);
+
+
 
 	unsigned long sps = (stat_adc_samplesendok+stat_adc_samplesendfailed)*1000/(stat_timems_end-stat_timems_start);
 	fprintf(file_pri,"%lu samples/sec\n",sps);
@@ -412,7 +466,10 @@ unsigned char mode_sample_adc_streamtext(FILE *file_stream,unsigned long pktsamp
 	//*bufferptr=0;
 	//bufferptr++;
 	//fputs(buffer,file_stream);
+
 	unsigned char putbufrv = fputbuf(file_stream,buffer,bufferptr-buffer);
+	//unsigned char putbufrv = 0;
+
 	//putbufrv = fputbuf(file_stream,buffer,1);
 	//bufferptr[0]='.';
 	//putbufrv = fputbuf(file_stream,buffer,1);
@@ -564,5 +621,59 @@ unsigned char mode_sample_adc_stream(FILE *file_stream,unsigned long pktsample,u
 
 	return mode_sample_adc_streambin(file_stream,pktsample,timesample,numchannels,data);
 }
+
+
+void mode_sample_adc_bench()
+{
+	fprintf(file_pri,"Benchmarking ADC text conversion/write\n");
+
+
+	volatile char buf[256];
+	unsigned long int t_last,t_cur;
+	unsigned long tint1,tint2;
+	unsigned nit=0;
+	unsigned benchtime=2;
+	unsigned long pktsample=1234567890;
+	unsigned long timesample=1876543210;
+	unsigned numchannels=1;
+	unsigned short data[1]={23456};
+	mode_stream_format_bin=0;
+	mode_stream_format_ts=1;
+	mode_stream_format_bat=0;
+	mode_stream_format_pktctr=1;
+	mode_stream_format_label = 0;
+
+
+
+	if(mode_sample_startlog(10))
+	{
+		fprintf(file_pri,"Err log\n");
+		return;
+	}
+	FILE *f=mode_sample_file_log;		// Write to mode_sample_file_lognit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		unsigned char rv;
+		//rv = mode_sample_adc_streamtext(f,pktsample,timesample,numchannels,data);
+		unsigned char putbufrv = fputbuf(f,buf,32);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+
+	mode_sample_logend();
+
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"Iterations: %u\n",nit);
+
+
+
+
+
+}
+
+
+
 
 
