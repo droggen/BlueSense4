@@ -771,13 +771,14 @@ void serial_uart_dma_tx(unsigned char serialid)
 	// Check if any data to transfer in the tx circular buffer
 	unsigned buflevel = buffer_level(&_serial_uart_param[serialid].txbuf);
 
+	//fprintf(file_usb,"serial_uart_dma_tx %d\n",buflevel);
 
 	if(buflevel==0)
 		return;
 	// Check if ongoing DMA transfer. If yes, return.
 	if(LL_DMA_IsEnabledChannel(DMA1,LL_DMA_CHANNEL_7))
 	{
-		//fprintf(file_pri,"err dma en\n");
+		//fprintf(file_usb,"err dma en\n");
 		return;
 	}
 	// Channel is free and data is available - fill in data
@@ -798,6 +799,7 @@ void serial_uart_dma_tx(unsigned char serialid)
 	LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_7);
 
 	// Channel enabled
+	//fprintf(file_usb,"dma go\n");
 }
 
 
