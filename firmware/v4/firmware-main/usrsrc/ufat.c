@@ -455,7 +455,7 @@ FILE *ufat_log_open(unsigned char n)
 	}
 
 	// Preallocate
-	fprintf(file_pri,"Preallocating %lluMB of contiguous space\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"Preallocating %luMB of contiguous space\n",_fsinfo.logsizebytes>>20);
 	res = f_expand (&_fsinfo.file_current_log,_fsinfo.logsizebytes,0);
 	if(res!=FR_OK)
 	{
@@ -504,7 +504,7 @@ FILE *ufat_log_open(unsigned char n)
 	//setvbuf (file, 0, _IOLBF, 16384);
 	//setvbuf (file, 0, _IOFBF, 8192);
 	//setvbuf (file, 0, _IOFBF, 16384);
-	//setvbuf (file, 0, _IOFBF, 2048);
+	//setvbuf (file, 0, _IOFBF, 4096);
 	//setvbuf (file, 0, _IOFBF, 2048);
 	setvbuf(file,_ufat_vbuf,_IOFBF,UFAT_VBUFMAX);
 
