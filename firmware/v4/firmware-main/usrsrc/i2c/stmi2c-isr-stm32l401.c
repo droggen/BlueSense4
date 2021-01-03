@@ -58,6 +58,9 @@ void I2C1_ER_IRQHandler()
 	fprintf(file_pri,"Ierr %08X\n",(unsigned)I2C1->ISR);
 #endif
 
+	I2C1->ICR|=0xffff;			// Clear any pending interrupts (to avoid errors continuously retriggering this)
+#warning State machine should handle the error - currently an error will hang.
+
 	//I2C_statemachine_internal();
 	//I2C_statemachine_outer();
 }
