@@ -25,8 +25,8 @@
 #include "system-extra.h"
 #include "uiconfig.h"
 /*#include "init.h"
-#include "dbg.h"
-#include "interface.h"*/
+#include "dbg.h"*/
+#include "interface.h"
 #include "mode_global.h"
 #include "ltc2942.h"
 #include "eeprom-m24.h"
@@ -477,16 +477,17 @@ unsigned char CommandParserError(char *buffer,unsigned char size)
 }*/
 unsigned char CommandParserInfo(char *buffer,unsigned char size)
 {	
-	int ien;
-	
-	unsigned char rv = ParseCommaGetInt(buffer,1,&ien);
+	int ien2;
+
+	int ien1 = ConfigLoadEnableInfo();
+	unsigned char rv = ParseCommaGetInt(buffer,1,&ien2);
 	if(!rv)
 	{
 		// Store
-		ConfigSaveEnableInfo(ien);
+		ConfigSaveEnableInfo(ien2);
 	}
-	ien = ConfigLoadEnableInfo();
-	fprintf(file_pri,"Information during streaming/logging enabled: %d\n",ien);
+	ien2 = ConfigLoadEnableInfo();
+	fprintf(file_pri,"Information during streaming/logging enabled: %d (previously was %d)\n",ien2,ien1);
 	return 0;
 }
 
