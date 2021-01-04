@@ -59,6 +59,7 @@ const COMMANDPARSER CommandParsersBenchmarks[] =
 	{'B', CommandParserBenchBT,help_benchbt},
 	{'I', CommandParserBenchITM,help_benchitm},
 	{'F', CommandParserBenchFile,"Benchmark file write"},
+	{'G', CommandParserBenchFile2,"Benchmark file write 2"},
 	{'W',CommandParserIntfWriteBench,"W,intf,ns,m Test write speed during ns seconds on intf (0=USB, 1=bluetooth) with method m (0=fputs, 1=putfbuf)"},
 	{'b',CommandParserIntfBuf,"B,intf,buf,type sets the buffer size to buf for intf (0=USB, 1=bluetooth). buf=0 is no buffering, otherwise line buffered"},
 	{'S',CommandParserIntfStatus,"Show interface status until keypress"},
@@ -202,6 +203,62 @@ unsigned char CommandParserBenchITM(char *buffer,unsigned char size)
 	benchmark_interface(file_itm,file_pri);
 	return 0;
 }
+unsigned char CommandParserBenchFile2(char *buffer,unsigned char size)
+{
+	(void)buffer; (void)size;
+
+
+	// Open file
+	unsigned log = ufat_log_getnumlogs();
+	if(log==0)
+	{
+		fprintf(file_pri,"No log files available, check SD card\n");
+		return 1;
+	}
+	log=log/2;							// Open the mid-log: log0 may be in the fast part of the SD card.
+	FILE *flog = ufat_log_open(log);
+	if(flog==0)
+	{
+		fprintf(file_pri,"Can't open log file, check SD card\n");
+		return 1;
+	}
+	fprintf(file_pri,"Benchmarking write to log %d\n",log);
+
+
+	unsigned long t_last=timer_s_wait();
+	unsigned long tint1=timer_ms_get_intclk();
+	unsigned long t_cur;
+	unsigned long benchtime = 2;
+	unsigned nit=0;
+	unsigned long nw=0;
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		char buffer[128];
+		char *bufferptr=buffer;
+		bufferptr=format1u32(bufferptr,nit);
+		bufferptr=format1u32(bufferptr,~nit);
+		bufferptr=format1u16(bufferptr,nit);
+		*bufferptr='\n';
+		bufferptr++;
+		fputbuf(flog,buffer,bufferptr-buffer);
+		nw+=(bufferptr-buffer);
+		nit++;
+	}
+	unsigned long tint2=timer_ms_get_intclk();
+
+	mode_sample_logend();
+
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"Iterations: %u\n",nit);
+	fprintf(file_pri,"Bytes: %u\n",nw);
+
+
+	ufat_log_close();
+
+	return 0;
+}
+
 unsigned char CommandParserBenchFile(char *buffer,unsigned char size)
 {
 	(void)buffer; (void)size;
@@ -228,7 +285,6 @@ unsigned char CommandParserBenchFile(char *buffer,unsigned char size)
 
 	return 0;
 }
-
 
 
 /******************************************************************************

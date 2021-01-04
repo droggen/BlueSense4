@@ -19,6 +19,7 @@ unsigned char CommandParserBenchUSB(char *buffer,unsigned char size);
 unsigned char CommandParserBenchBT(char *buffer,unsigned char size);
 unsigned char CommandParserBenchITM(char *buffer,unsigned char size);
 unsigned char CommandParserBenchFile(char *buffer,unsigned char size);
+unsigned char CommandParserBenchFile2(char *buffer,unsigned char size);
 
 unsigned char CommandParserIntfWriteBench(char *buffer,unsigned char size);
 unsigned char CommandParserIntfBuf(char *buffer,unsigned char size);

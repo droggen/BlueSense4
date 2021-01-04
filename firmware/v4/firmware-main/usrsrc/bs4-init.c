@@ -366,11 +366,8 @@ toto1:
 #endif
 
 	// Init the SD interface
-	//stm_sdm_setinitparam(8,1);			// Initialisation for 20MHz bus (2.5MHz SDIO)
-	//stm_sdm_setinitparam(6,1);			// Initialisation for 16MHz bus (2.66MHz SDIO)
-
-	//stm_sdm_setinitparam(4,1);			// Initialisation for 16MHz bus (4MHz SDIO)
-	stm_sdm_setinitparam(2,1);			// Initialisation for 16MHz bus (8MHz SDIO)
+	stm_sdm_setinitparam(2,1);			// Initialisation for 48MHz bus (24MHz SDIO)
+	//stm_sdm_setinitparam(1,1);			// Initialisation for 48MHz bus (48MHz SDIO)
 
 
 	//stm_sdm_init();					// This will be called by FatFs driver

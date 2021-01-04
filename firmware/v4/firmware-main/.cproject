@@ -274,6 +274,28 @@
 							</tool>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="fr.ac6.managedbuild.config.gnu.cross.exe.release.756604903.1303897596" name="main.c" rcbsApplicability="disable" resourcePath="Core/Src/main.c" toolsToInvoke="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.1223081856.296085490">
+						<tool id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.1223081856.296085490" name="MCU GCC Compiler" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.1223081856">
+							<option id="gnu.c.compiler.option.preprocessor.def.symbols.1252330393" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" valueType="definedSymbols">
+								<listOptionValue builtIn="false" value="USE_FULL_LL_DRIVER"/>
+								<listOptionValue builtIn="false" value="USE_HAL_DRIVER"/>
+								<listOptionValue builtIn="false" value="STM32L496xx"/>
+								<listOptionValue builtIn="false" value="_GNU_SOURCE"/>
+								<listOptionValue builtIn="false" value="BLUETOOTH_POWERSAVE=0"/>
+								<listOptionValue builtIn="false" value="BOOTLOADER=0"/>
+								<listOptionValue builtIn="false" value="BUILD_BLUETOOTH=1"/>
+								<listOptionValue builtIn="false" value="DBG_RN41TERMINAL=1"/>
+								<listOptionValue builtIn="false" value="ENABLEMODECOULOMB=1"/>
+								<listOptionValue builtIn="false" value="ENABLEQUATERNION=1"/>
+								<listOptionValue builtIn="false" value="MSM_LOGBAT=0"/>
+								<listOptionValue builtIn="false" value="BUILD_RTC=1"/>
+								<listOptionValue builtIn="false" value="ENABLE_RTC_EXTERNAL=1"/>
+								<listOptionValue builtIn="false" value="ENABLE_RTC_INTERNAL=0"/>
+							</option>
+							<inputType id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c.325773209" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c"/>
+							<inputType id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.s.1038445182" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.s"/>
+						</tool>
+					</fileInfo>
 					<sourceEntries>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="CMSIS"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
