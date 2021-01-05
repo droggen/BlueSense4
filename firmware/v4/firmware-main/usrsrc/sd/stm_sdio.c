@@ -252,7 +252,7 @@ unsigned char sd_block_read_n(unsigned long addr,char *buffer,int nsector)
 	HAL_SD_CardStateTypeDef s2;
 	s2 = HAL_SD_GetCardState(&hsd1);
 
-	fprintf(file_pri,"s: %d s2: %d. buffer: %02X:%02X%02X %02X  %02X:%02X%02X %02X\n",s,s2,buffer[0],buffer[1],buffer[2],buffer[3],buffer[509],buffer[510],buffer[511],buffer[508]);
+	//fprintf(file_pri,"s: %d s2: %d. buffer: %02X:%02X%02X %02X  %02X:%02X%02X %02X\n",s,s2,buffer[0],buffer[1],buffer[2],buffer[3],buffer[509],buffer[510],buffer[511],buffer[508]);
 
 //	HAL_Delay(100);
 //	s2 = HAL_SD_GetCardState(&hsd1);
@@ -415,7 +415,7 @@ unsigned char sd_block_write_n(unsigned long addr,char *buffer,int nsector)
 		cnt++;
 	}
 	while( ((t2=timer_ms_get())-t1<MMC_TIMEOUT_READWRITE) && (s2 == HAL_SD_CARD_PROGRAMMING) );
-	fprintf(file_pri,"Write done (status: %d; time: %u ms; cnt %u)\n",s2,t2-t1,cnt);
+	//fprintf(file_pri,"Write done (status: %d; time: %u ms; cnt %u)\n",s2,t2-t1,cnt);
 	//HAL_Delay(50);
 	//HAL_SD_CardStateTypeDef s3 = HAL_SD_GetCardState(&hsd1);
 	//fprintf(file_pri,"\t%d %d\n",s0,s3);

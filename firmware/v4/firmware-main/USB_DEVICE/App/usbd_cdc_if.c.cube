@@ -411,4 +411,3 @@ void usb_cdc_txready_callback()
   */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
-

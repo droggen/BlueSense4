@@ -26,14 +26,13 @@
 #include "fatfs.h"
 #include "i2c.h"
 #include "sdmmc.h"
-#include "tim.h"
-#include "usart.h"
 #include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usrmain.h"
+#include "tim.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -100,7 +99,7 @@ int main(void)
   MX_SDMMC1_SD_Init();
   MX_FATFS_Init();
 
-  MX_DMA_Init();
+  MX_DMA_Init();		// DMA init must be before DFSDM1
 
   MX_DFSDM1_Init();
 

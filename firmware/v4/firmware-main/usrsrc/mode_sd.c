@@ -229,10 +229,11 @@ const COMMANDPARSER CommandParsersSD[] =
 	{'2', CommandParserSDBench_t2,help_sdbench2},*/
 	{0,0,"---- Sector benchmark functions ----"},
 	{'1',CommandParserSDBenchReadSect,"1,<sectfrom>,<sectto>,<sectatatime> Benchmark read sector from sectfrom to sectto by groups of sectatatime (HAL_SD_ReadBlocks)."},
-	{'2',CommandParserSDBenchReadSectIT,"2,<sectfrom>,<sectto>,<sectatatime> Benchmark read sector from sectfrom to sectto by groups of sectatatime with IT (HAL_SD_ReadBlocks_IT)."},
-	//{'3',CommandParserSDBenchReadSectDMA,"3,<sectfrom>,<sectto>,<sectatatime> Benchmark read sector from sectfrom to sectto by groups of sectatatime with DMA (HAL_SD_ReadBlocks_DMA)."},
+	//{'2',CommandParserSDBenchReadSectIT,"2,<sectfrom>,<sectto>,<sectatatime> Benchmark read sector from sectfrom to sectto by groups of sectatatime with IT (HAL_SD_ReadBlocks_IT)."},
+	{'3',CommandParserSDBenchReadSectDMA,"3,<sectfrom>,<sectto>,<sectatatime> Benchmark read sector from sectfrom to sectto by groups of sectatatime with DMA (HAL_SD_ReadBlocks_DMA)."},
 
 	{'6',CommandParserSDBenchWriteSect,"6,<sectfrom>,<sectto>,<sectatatime> Benchmark write sector from sectfrom to sectto by groups of sectatatime (HAL_SD_WriteBlocks)."},
+	{'7',CommandParserSDBenchWriteSect2,"7,<sectfrom>,<sectto>,<sectatatime> Benchmark write sector from sectfrom to sectto by groups of sectatatime (HAL_SD_WriteBlocks_DMA)."},
 
 	{'P',CommandParserSDWritePattern,"P,<sectfrom>,<sectto> Write sectors from sectfrom to sectto with identifiable pattern"},
 
@@ -240,6 +241,7 @@ const COMMANDPARSER CommandParsersSD[] =
 	{'I', CommandParserSDInitInterface,"I[,<divider>,<4ben>] Init SD interface and card with optinal divider 4-bit wide bus enable"},
 	{'W', CommandParserSDWrite,help_write},
 	{'R', CommandParserSDRead,help_read},
+	{'T', CommandParserSDRead2,"read with dma"},
 	{'E', CommandParserSDErase,help_erase},
 	{'S', CommandParserSDState,help_sd_state},
 	{'d', CommandParserSDDetectTest,help_sd_detect},
@@ -250,6 +252,10 @@ const COMMANDPARSER CommandParsersSD[] =
 	//{'1', CommandParserSDRegPUPDActive,help_sd_1},
 	//{'2', CommandParserSDRegPUPDDeactive,help_sd_1},
 	//{'B', CommandParserSDBench,help_sd_bench},
+
+	{'M', CommandParserSDDMA1,"DMA test 1"},
+	{'m', CommandParserSDDMA2,"DMA test 2"},
+	{'n', CommandParserSDDMA3,"DMA test 3"},
 
 
 	//{'3', CommandParserSDLogTest3,help_sd_1},
@@ -515,7 +521,10 @@ unsigned char CommandParserSDWrite(char *buffer,unsigned char size)
 		block[i]=data;
 
 
-	rv = sd_block_write(sector,block);
+	//rv = sd_block_write(sector,block);
+	 rv = SD_write(0, block, sector, 1);			// Use the board support package of fatfs, which uses dma
+
+
 	fprintf(file_pri,"Write result: %d\n",rv);
 
 
@@ -548,6 +557,73 @@ unsigned char CommandParserSDRead(char *buffer,unsigned char size)
 	memset(block,0x55,512);
 	rv = sd_block_read(sector,block);
 	fprintf(file_pri,"Read result: %d\n",rv);
+	print_bin(file_pri,block,512);
+
+	return 0;
+
+}
+unsigned char CommandParserSDRead2(char *buffer,unsigned char size)
+{
+	unsigned char rv;
+	unsigned sector;
+	rv = ParseCommaGetInt(buffer,1,&sector);
+	if(rv)
+		return 2;
+
+
+	/*BSP_SD_Init();
+
+	// Get sector
+	HAL_SD_CardInfoTypeDef ci;
+	if(HAL_SD_GetCardInfo(&hsd1,&ci))
+		fprintf(file_pri,"Error: card not initialised?\n");
+
+	if(sector>ci.BlockNbr-1)
+	{
+		fprintf(file_pri,"Error: maximum sector is %lu\n",ci.BlockNbr-1);
+		return 2;
+	}*/
+
+	fprintf(file_pri,"Read sector %u\n",sector);
+	char _block[512+32];
+	char *block=_block;
+	fprintf(file_pri,"Address: %08X\n",block);
+	block+=32;
+	block=(char*)(((unsigned int)block)&0xfffffffC);
+	fprintf(file_pri,"Address2: %08X\n",block);
+	memset(block,0x55,512);
+
+
+		//HAL_StatusTypeDef s = HAL_SD_ReadBlocks(&hsd1,block,sector,1,MMC_TIMEOUT_READWRITE);
+		//HAL_StatusTypeDef s = HAL_SD_ReadBlocks_DMA(&hsd1, block, sector, 1);
+
+		DRESULT r = SD_read(0, block,sector, 1);
+
+		//fprintf(file_pri,"readblock: %d\n",s);
+		fprintf(file_pri,"sd_read: %d\n",r);
+		/*if(s)
+		{
+			fprintf(file_pri,"HAL_SD_ReadBlocks error\n");
+		}
+		else
+		{*/
+
+			/*HAL_SD_CardStateTypeDef s2;
+			s2 = HAL_SD_GetCardState(&hsd1);
+
+			fprintf(file_pri,"card state: %d\n",s2);*/
+			//fprintf(file_pri,"s: %d s2: %d. buffer[0]: %02X\n",s,s2,blck[0]);
+
+		//	HAL_Delay(100);
+		//	s2 = HAL_SD_GetCardState(&hsd1);
+
+		//	fprintf(file_pri,"\ts: %d s2: %d\n",s,s2);
+
+
+//		}
+
+
+
 	print_bin(file_pri,block,512);
 
 	return 0;
@@ -1431,6 +1507,76 @@ unsigned char CommandParserSDBenchWriteSect(char *buffer,unsigned char size)
 
 	return 0;
 }
+unsigned char CommandParserSDBenchWriteSect2(char *buffer,unsigned char size)
+{
+	unsigned char rv;
+	unsigned sfrom,sto,sectatatime;
+	const unsigned maxsectatatime=16;
+
+	if(ParseCommaGetNumParam(buffer)==3)
+	{
+		rv = ParseCommaGetInt(buffer,3,&sfrom,&sto,&sectatatime);
+		if(rv)
+		{
+			fprintf(file_pri,"Invalid arguments\n");
+			return 2;
+		}
+	}
+	else
+	{
+		rv = ParseCommaGetInt(buffer,2,&sfrom,&sto);
+		if(rv)
+		{
+			fprintf(file_pri,"Invalid arguments\n");
+			return 2;
+		}
+		sectatatime=1;
+	}
+	if(sectatatime>maxsectatatime)
+	{
+		fprintf(file_pri,"Maximum sector at a time is 16 (now: %d)\n",sectatatime);
+		return 2;
+	}
+
+	if(sfrom>sto)
+		return 2;
+
+
+	fprintf(file_pri,"Benchmarking write from sector %u to %u by groups of %d\n",sfrom,sto,sectatatime);
+	char block[maxsectatatime*512];
+	for(unsigned short i=0;i<512;i+=2)
+	{
+		memset(block,0,maxsectatatime*512);
+	}
+
+	unsigned errcnt=0;
+	unsigned t1,t2;
+	t1 = timer_ms_get();
+	for(unsigned s = sfrom;s<=sto;s+=sectatatime)
+	{
+		block[0]='S';
+		block[1]=s>>8;
+		block[2]=s&0xff;
+		block[509]='S';
+		block[510]=s>>8;
+		block[511]=s&0xff;
+		block[3] = block[508] = s%10;
+
+		//rv = sd_block_write_n(s,block,sectatatime);
+		//HAL_StatusTypeDef s = HAL_SD_WriteBlocks_DMA(&hsd1,block,s,sectatatime);
+		rv = SD_write(0, block, s, sectatatime);
+
+			//fprintf(file_pri,"write dma: %d\n");
+		//rv = sd_block_write(s,block);
+		if(rv)
+			errcnt++;
+	}
+	t2 = timer_ms_get();
+	unsigned ns = sto-sfrom+1;
+	fprintf(file_pri,"Write complete in %u ms. Errors: %u. Write speed: %u sector/second; %u KB/s\n",t2-t1,errcnt,ns*1000/(t2-t1),ns*1000/(t2-t1)*512/1024);
+
+	return 0;
+}
 unsigned char CommandParserSDBenchReadSect(char *buffer,unsigned char size)
 {
 	unsigned char rv;
@@ -1583,7 +1729,8 @@ unsigned char CommandParserSDBenchReadSectDMA(char *buffer,unsigned char size)
 	for(unsigned s = sfrom;s<=sto;s+=sectatatime)
 	{
 		//rv = sd_block_read(s,block);
-		rv = sd_block_read_n_dma(s,block,sectatatime);
+		//rv = sd_block_read_n_dma(s,block,sectatatime);
+		rv = SD_read(0,block,s,sectatatime);
 		if(rv)
 			errcnt++;
 	}
@@ -1662,6 +1809,10 @@ unsigned char CommandParserSDInitInterface(char *buffer,unsigned char size)
 	}
 
 	stm_sdm_init();
+
+/*#warning dma
+	DSTATUS s = SD_initialize(0);
+	fprintf(file_pri,"dstatus: %d\n",s);*/
 
 
 	return 0;
@@ -1946,6 +2097,89 @@ unsigned char CommandParserSDYModemSendFile(char *buffer,unsigned char size)
 		fprintf(file_pri,"\nTransfer error\n");
 		return 1;
 	}
+
+
+	return 0;
+}
+
+
+unsigned char CommandParserSDDMA1(char *buffer,unsigned char size)
+{
+	/* DMA for SDMMC1 is:
+	DMA2 Channel 4
+	DMA2 Channel 5
+
+	After a write the following are changed:
+		Addr 40020444: 00000A91
+		Addr 40020448: 00000000
+		Addr 4002044C: 40012880
+		Addr 40020450: 2004FD80
+
+	After a read the following are changed:
+		Addr 40020444: 00000A90
+		Addr 40020448: 00000000
+		Addr 4002044C: 00000000
+		Addr 40020450: 00000000
+		Addr 40020458: 00000A81
+		Addr 4002045C: 00000000
+		Addr 40020460: 40012880
+		Addr 40020464: 2004FD7C
+	*/
+	unsigned cserl = *(((unsigned *)DMA2_BASE)+(0xa8/4));
+	fprintf(file_pri,"CSERL %08x\n",cserl);
+	fprintf(file_pri,"Address of DMA2 %08x\n",DMA2);
+	fprintf(file_pri,"Address of DMA2_BASE %08x\n",DMA2_BASE);
+	fprintf(file_pri,"Address of IFCR %08x\n",&DMA2->IFCR);
+	fprintf(file_pri,"Address of ISR %08x\n",&DMA2->ISR);
+
+	for(int o=0;o<=0xA8/4;o++)
+	{
+		unsigned *adr = ((unsigned *)DMA2_BASE)+o;
+		fprintf(file_pri,"Addr %08X: %08X: %08X\n",adr,o*4,*adr);
+	}
+
+
+	return 0;
+}
+unsigned char CommandParserSDDMA2(char *buffer,unsigned char size)
+{
+	//__HAL_LINKDMA(&hsd1,hdmarx,hdma_sdmmc1_rx);
+	//__HAL_LINKDMA(&hsd1,hdmatx,hdma_sdmmc1_tx);
+	unsigned rv1,rv2;
+
+	//rv2 = HAL_DMA_DeInit(&hdma_sdmmc1_tx);
+	//__HAL_DMA_DISABLE(&hdma_sdmmc1_tx);
+	//rv1 = HAL_DMA_Init(&hdma_sdmmc1_rx);
+
+	*((unsigned*)0x400204A8) = 0x00017000;		// Channel 4=7=SDMMC, channel 5=1=nothing (write to mmc)
+
+	fprintf(file_pri,"%d %d\n",rv1,rv2);
+	/*LL_DMA_DisableChannel(DMA2,LL_DMA_CHANNEL_4);
+	LL_DMA_EnableChannel(DMA2,LL_DMA_CHANNEL_5);*/
+
+	//LL_DMA_SetDataTransferDirection(DMA2,LL_DMA_CHANNEL_4,LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+
+	return 0;
+}
+unsigned char CommandParserSDDMA3(char *buffer,unsigned char size)
+{
+	//__HAL_LINKDMA(&hsd1,hdmarx,hdma_sdmmc1_rx);
+	//__HAL_LINKDMA(&hsd1,hdmatx,hdma_sdmmc1_tx);
+
+	unsigned rv1,rv2;
+
+	//rv2 = HAL_DMA_DeInit(&hdma_sdmmc1_rx);
+	//__HAL_DMA_DISABLE(&hdma_sdmmc1_rx);
+	//rv1 = HAL_DMA_Init(&hdma_sdmmc1_tx);
+
+	*((unsigned*)0x400204A8) = 0x00072000;		// Channel 5=7=SDMMC, Channel 4=2=nothing (read from mmc)
+
+	fprintf(file_pri,"%d %d\n",rv1,rv2);
+
+	/*LL_DMA_DisableChannel(DMA2,LL_DMA_CHANNEL_5);
+	LL_DMA_EnableChannel(DMA2,LL_DMA_CHANNEL_4);*/
+
+	//LL_DMA_SetDataTransferDirection(DMA2,LL_DMA_CHANNEL_4,LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
 
 
 	return 0;

@@ -14,6 +14,7 @@ unsigned char CommandParserSDErase2(char *buffer,unsigned char size);
 unsigned char CommandParserSDErase3(char *buffer,unsigned char size);
 unsigned char CommandParserSDWrite(char *buffer,unsigned char size);
 unsigned char CommandParserSDRead(char *buffer,unsigned char size);
+unsigned char CommandParserSDRead2(char *buffer,unsigned char size);
 unsigned char CommandParserSDStream(char *buffer,unsigned char size);
 unsigned char CommandParserSDVolume(char *buffer,unsigned char size);
 unsigned char CommandParserSDFormatFull(char *buffer,unsigned char size);
@@ -41,6 +42,7 @@ unsigned char CommandParserSDInitInterface(char *buffer,unsigned char size);
 unsigned char CommandParserSDWritePattern(char *buffer,unsigned char size);
 
 unsigned char CommandParserSDBenchWriteSect(char *buffer,unsigned char size);
+unsigned char CommandParserSDBenchWriteSect2(char *buffer,unsigned char size);
 
 unsigned char CommandParserSDBenchReadSect(char *buffer,unsigned char size);
 unsigned char CommandParserSDBenchReadSectIT(char *buffer,unsigned char size);
@@ -52,6 +54,10 @@ unsigned char CommandParserSDDeleteAll(char *buffer,unsigned char size);
 unsigned char CommandParserSDCreate(char *buffer,unsigned char size);
 unsigned char CommandParserSDCat(char *buffer,unsigned char size);
 unsigned char CommandParserSDYModemSendFile(char *buffer,unsigned char size);
+
+unsigned char CommandParserSDDMA1(char *buffer,unsigned char size);
+unsigned char CommandParserSDDMA2(char *buffer,unsigned char size);
+unsigned char CommandParserSDDMA3(char *buffer,unsigned char size);
 
 void mode_sd(void);
 
