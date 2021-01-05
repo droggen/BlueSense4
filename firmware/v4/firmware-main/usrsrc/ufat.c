@@ -249,7 +249,7 @@ unsigned char ufat_format_partial(unsigned char numlogfile)
 
 	//fprintf(file_pri,"logsizebytes: %lu\n",_fsinfo.logsizebytes);
 
-	fprintf(file_pri,"Max expected log size for pre-allocation: %lluMB\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"Max expected log size for pre-allocation: %luMB\n",_fsinfo.logsizebytes>>20);
 
 
 	// Create empty log files
@@ -320,7 +320,7 @@ void _ufat_estimatecardspace(int numlogfile)
 
 	//fprintf(file_pri,"logsizebytes: %lu\n",_fsinfo.logsizebytes);
 
-	fprintf(file_pri,"\tMax expected log size for pre-allocation: %lluMB\n",_fsinfo.logsizebytes>>20);
+	fprintf(file_pri,"\tMax expected log size for pre-allocation: %luMB\n",_fsinfo.logsizebytes>>20);
 
 }
 
@@ -507,6 +507,7 @@ FILE *ufat_log_open(unsigned char n)
 	//setvbuf (file, 0, _IOFBF, 4096);
 	//setvbuf (file, 0, _IOFBF, 2048);
 	setvbuf(file,_ufat_vbuf,_IOFBF,UFAT_VBUFMAX);
+	//setvbuf(file,_ufat_vbuf,_IOFBF,UFAT_VBUFMAX/2);
 
 
 	return file;

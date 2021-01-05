@@ -1123,6 +1123,20 @@ unsigned char CommandParserBenchmarkNumberConversion(char *buffer,unsigned char 
 	fprintf(file_pri,"u32toa_div5 Iterations: %u\n",nit);
 	fprintf(file_pri,"'%s'\n",buf);
 
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u32toa_div6(pktsample,buf);
+		u32toa_div6(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u32toa_div6 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
 
 	unsigned nums[]={123, 3000000000,4000000000,1000000,32767,1,0};
 
@@ -1182,6 +1196,20 @@ unsigned char CommandParserBenchmarkNumberConversion(char *buffer,unsigned char 
 	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
 	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
 	fprintf(file_pri,"u16toa_div5 Iterations: %u\n",nit);
+	fprintf(file_pri,"'%s'\n",buf);
+
+	nit=0;
+	t_last=timer_s_wait(); tint1=timer_ms_get_intclk();
+	while((t_cur=timer_s_get())-t_last<benchtime)
+	{
+		//u16toa_div6(pktsample,buf);
+		u16toa_div6(nit,buf);
+		nit++;
+	}
+	tint2=timer_ms_get_intclk();
+	fprintf(file_pri,"Time: %lu ms\n",tint2-tint1);
+	fprintf(file_pri,"Time: %lu ms (second timer)\n",(t_cur-t_last)*1000);
+	fprintf(file_pri,"u16toa_div6 Iterations: %u\n",nit);
 	fprintf(file_pri,"'%s'\n",buf);
 
 

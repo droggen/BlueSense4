@@ -272,7 +272,7 @@ void mode_sample_multimodal(void)
 		} // MPU
 
 		// Sleep
-		_MODE_SAMPLE_SLEEP;
+		//_MODE_SAMPLE_SLEEP;
 	}	// Continuous loop
 	//stat_timems_end = timer_ms_get();
 

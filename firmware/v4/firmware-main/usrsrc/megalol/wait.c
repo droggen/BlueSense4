@@ -242,7 +242,7 @@ void _timer_tick_hz(void)
 	_timer_time_1hzupdatectr++;
 
 	//return;	// Debug: never do correction
-#if 0
+#if 1
 	// Updating the internal time every 5s leads to <estimate ppm error>
 	const unsigned updateperiod = 5;
 	if(_timer_time_1hzupdatectr>=updateperiod)

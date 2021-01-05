@@ -81,6 +81,17 @@ void u32toa_div4(unsigned v,unsigned char *ptr)
 void u32toa_div5(unsigned v,unsigned char *ptr)
 {
 	unsigned n;
+	/*ptr[0]='0';
+	ptr[1]='0';
+	ptr[2]='0';
+	ptr[3]='0';
+	ptr[4]='0';
+	ptr[5]='0';
+	ptr[6]='0';
+	ptr[7]='0';
+	ptr[8]='0';
+	ptr[9]='0';
+	ptr[10]=0;*/
 
 	for(int i=0;i<9;i++)
 	{
@@ -89,6 +100,40 @@ void u32toa_div5(unsigned v,unsigned char *ptr)
 		ptr[i]='0'+n;
 	}
 	ptr[9] = '0'+v;
+	ptr[10]=0;
+}
+void u32toa_div6(unsigned v,unsigned char *ptr)
+{
+	unsigned n;
+
+	n = v/1000000000;
+	v-=n*1000000000;
+	ptr[0]='0'+n;
+	n = v/100000000;
+	v-=n*100000000;
+	ptr[1]='0'+n;
+	n = v/10000000;
+	v-=n*10000000;
+	ptr[2]='0'+n;
+	n = v/1000000;
+	v-=n*1000000;
+	ptr[3]='0'+n;
+	n = v/100000;
+	v-=n*100000;
+	ptr[4]='0'+n;
+	n = v/10000;
+	v-=n*10000;
+	ptr[5]='0'+n;
+	n = v/1000;
+	v-=n*1000;
+	ptr[6]='0'+n;
+	n = v/100;
+	v-=n*100;
+	ptr[7]='0'+n;
+	n = v/10;
+	v-=n*10;
+	ptr[8]='0'+n;
+	ptr[9]='0'+v;
 	ptr[10]=0;
 }
 
@@ -267,6 +312,25 @@ void u16toa_div5(unsigned short v,unsigned char *ptr)
 	ptr[4] = '0'+v;
 	ptr[5]=0;
 }
+void u16toa_div6(unsigned short v,unsigned char *ptr)
+{
+	unsigned n;
+
+	n = v/10000;
+	v-=n*10000;
+	ptr[0]='0'+n;
+	n = v/1000;
+	v-=n*1000;
+	ptr[1]='0'+n;
+	n = v/100;
+	v-=n*100;
+	ptr[2]='0'+n;
+	n = v/10;
+	v-=n*10;
+	ptr[3]='0'+n;
+	ptr[4]='0'+v;
+	ptr[5]=0;
+}
 void u16toa_sub(unsigned short v,unsigned char *ptr)
 {
 	unsigned char *ptro = ptr;
@@ -441,3 +505,4 @@ unsigned log2rndceil(unsigned val)
 	}
 	return 0;
 }
+
