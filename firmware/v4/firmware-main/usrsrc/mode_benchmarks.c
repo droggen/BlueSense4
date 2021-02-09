@@ -233,6 +233,11 @@ unsigned char CommandParserBenchFile2(char *buffer,unsigned char size)
 	unsigned long nw=0;
 	while((t_cur=timer_s_get())-t_last<benchtime)
 	{
+		//if(fgetc(file_pri)!=-1)
+			//break;
+		if(fischar(file_pri))
+			break;
+
 		char buffer[128];
 		char *bufferptr=buffer;
 		bufferptr=format1u32(bufferptr,nit);

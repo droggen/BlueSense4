@@ -12,9 +12,8 @@
 #include <string.h>
 
 #include "global.h"
-//#include "helper.h"
 #include "command.h"
-//#include "ds3232.h"
+#include "serial.h"
 
 
 /*
@@ -22,6 +21,7 @@
 	
 	Command line processing functions
 */
+
 	
 
 char CommandBuffer[COMMANDMAXSIZE];
@@ -183,8 +183,8 @@ unsigned char CommandGet(const COMMANDPARSER *CommandParsers,unsigned char Comma
 	static unsigned char quote=0;			// Indicates whether we are in a quotation mode, where the semicolon separator is not used to separate commands
 	
 	// Fast path: check if any key
-	//if(!fischar(file_pri))
-		//return 0;
+	if(!fischar(file_pri))
+		return 0;
 
 	// If connected to a primary source, read that source until the source is empty or the command buffer is full
 	// CommandBufferPtr indicates how many bytes are in the command buffer. The code below limits this to maximum COMMANDMAXSIZE.
