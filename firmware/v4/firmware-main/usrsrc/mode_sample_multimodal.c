@@ -102,6 +102,7 @@ unsigned char CommandParserSampleMultimodal(char *buffer,unsigned char size)
 		default:
 			if(ParseCommaGetUnsigned(buffer,6,&mode_sample_multimodal_mode,&mode_sample_stereo,&mode_adc_mask,&mode_adc_period,&mode_sample_param_logfile,&mode_sample_param_duration))
 				return 2;
+			mode_sample_param_duration*=1000;		// Convert to milliseconds
 			break;
 	}
 

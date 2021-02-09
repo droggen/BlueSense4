@@ -83,7 +83,7 @@ void mode_sample_motion_setparam(unsigned char mode, int logfile, int duration)
 {
 	mode_sample_motion_param.mode=mode;
 	mode_sample_motion_param.logfile=logfile;
-	mode_sample_param_duration=duration;
+	mode_sample_param_duration=duration*1000;
 	
 	//printf("duration: %lu\n",mode_sample_motion_param.duration);
 	//printf("mode_sample_motion_setparam: %d %d %d\n",mode_sample_motion_param.mode,mode_sample_motion_param.logfile,mode_sample_motion_param.duration);

@@ -202,6 +202,7 @@ unsigned char CommandParserADC(char *buffer,unsigned char size)
 		default:
 			if(ParseCommaGetInt(buffer,5,&mode_adc_mask,&mode_adc_period,&mode_adc_fastbin,&mode_sample_param_logfile,&mode_sample_param_duration))
 				return 2;
+			mode_sample_param_duration*=1000;		// Convert to milliseconds
 			break;
 	}
 #if 0
@@ -390,6 +391,7 @@ void mode_sample_adc(void)
 	} // End sample loop
 	unsigned long ts2 = timer_s_get();
 	stat_timems_end = timer_ms_get();
+	unsigned level = stm_adc_data_level();
 
 	// Stop sampling
 	stm_adc_acquire_stop();
@@ -407,7 +409,7 @@ void mode_sample_adc(void)
 	// Print statistics
 
 
-	fprintf(file_pri,"Time in s: %lu\n",ts2-ts1);
+	fprintf(file_pri,"Time elapsed with second counter: %lu. Level in buffer: %u\n",ts2-ts1,level);
 	/*for(int i=0;i<512;i++)
 		fprintf(file_pri,"%lu %lu %lu\n",tit[i],titl[i],titl2[i]);
 	fprintf(file_pri,"\n");*/
@@ -633,10 +635,10 @@ void mode_sample_adc_bench()
 	unsigned long tint1,tint2;
 	unsigned nit=0;
 	unsigned benchtime=2;
-	unsigned long pktsample=1234567890;
+	/*unsigned long pktsample=1234567890;
 	unsigned long timesample=1876543210;
 	unsigned numchannels=1;
-	unsigned short data[1]={23456};
+	unsigned short data[1]={23456};*/
 	mode_stream_format_bin=0;
 	mode_stream_format_ts=1;
 	mode_stream_format_bat=0;

@@ -40,7 +40,7 @@
 unsigned long stat_timems_start,stat_t_cur,stat_wakeup,stat_time_laststatus;
 unsigned long int time_lastblink;
 
-int	mode_sample_param_duration;
+int	mode_sample_param_duration;			// Logging duration in milliseconds
 int mode_sample_param_logfile;
 
 // Log file used by the modes mode_adc and mode_motionstream

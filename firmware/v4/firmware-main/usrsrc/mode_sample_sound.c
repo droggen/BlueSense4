@@ -62,7 +62,7 @@ void mode_sample_sound(void)
 	fprintf(file_pri,"SMPLSOUND>\n");
 
 	//fprintf(file_pri,"mode: %d frame: %d logfile: %d duration: %d\n",mode_sample_sound_param_mode,mode_sample_sound_param_framebased,mode_sample_sound_param_logfile,mode_sample_param_duration);
-	fprintf(file_pri,"mode: %d left_right: %d logfile: %d duration: %d\n",mode_sample_sound_param_mode,mode_sample_sound_param_left_right,mode_sample_sound_param_logfile,mode_sample_param_duration);
+	fprintf(file_pri,"mode: %d left_right: %d logfile: %d duration: %d [ms]\n",mode_sample_sound_param_mode,mode_sample_sound_param_left_right,mode_sample_sound_param_logfile,mode_sample_param_duration);
 
 
 	mode_sample_file_log=0;										// Initialise log to null
@@ -247,7 +247,7 @@ void mode_sample_sound_setparam(unsigned char mode,unsigned char left_right, int
 	mode_sample_sound_param_mode=mode;
 	//mode_sample_sound_param_framebased=framebased;
 	mode_sample_sound_param_logfile=logfile;
-	mode_sample_param_duration=duration;		// Store the duration in seconds
+	mode_sample_param_duration=duration*1000;		// Store the duration in milliseconds
 	mode_sample_sound_param_left_right=left_right;
 
 	//printf("duration: %lu\n",mode_sample_motion_param.duration);

@@ -11,7 +11,7 @@ Relies on:
 	stat_timems_start: start time (in milliseconds)
 	stat_t_cur: current time (in milliseconds)
 */
-#define _MODE_SAMPLE_CHECK_DURATION_BREAK if(mode_sample_param_duration) { if(stat_t_cur-stat_timems_start>=mode_sample_param_duration*1000) break; }
+#define _MODE_SAMPLE_CHECK_DURATION_BREAK if(mode_sample_param_duration) { if(stat_t_cur-stat_timems_start>=mode_sample_param_duration) break; }
 
 /* Check whether battery is too low to stop streaming/logging
 Relies on:
