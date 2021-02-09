@@ -2,7 +2,7 @@
 #define __HELPER_NUM_H
 
 // Select which conversion function to use.
-// On ARM the best is u32toa_div6 and u16toa_div6
+// On ARM with -O2 the best is u32toa_div6 and u16toa_div6 (with -O3 the version 5 is faster)
 //#define u32toa u32toa_sub
 #define u32toa u32toa_div6
 //#define u16toa u16toa_sub
