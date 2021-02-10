@@ -31,6 +31,10 @@
 #define APP_MODE_SERIALTEST 27
 #define APP_MODE_MODULATION 28
 
+
+// User (non core firmware) modes
+#define APP_MODE_USER 100
+
 void mode_dispatch(void);
 
 

@@ -53,6 +53,7 @@
 #include "mode_dac.h"
 #include "mode_serial.h"
 #include "mode_modulation.h"
+#include "mode_usr.h"
 
 void mode_dispatch(void)
 {
@@ -191,6 +192,10 @@ void mode_dispatch(void)
 				break;
 			case APP_MODE_MODULATION:
 				mode_modulation();
+				system_mode=APP_MODE_MAIN;
+				break;
+			case APP_MODE_USER:
+				mode_user();
 				system_mode=APP_MODE_MAIN;
 				break;
 			default:

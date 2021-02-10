@@ -58,6 +58,7 @@
 #include "mode_dac.h"
 #include "mode_serial.h"
 #include "mode_modulation.h"
+#include "mode_usr.h"
 
 #include "system-extra.h"
 
@@ -145,6 +146,10 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{'~', CommandParserClearBootCounter,help_clearbootctr},
 	{'?', CommandParserIdentify,help_identify},
 	{'V',CommandParserVT100,"V[,<en>] Queries the VT100 mode; or enables (en=1) or disables (en=0) it"},
+
+	{0,0,"---- Modulation ----"},
+	{'L', CommandParserModeModulation,"Modulation"},
+
 	{0,0,"---- Development/Test ----"},
 	{'K', CommandParserBenchmark,"Benchmarks"},
 
@@ -171,6 +176,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 	{':', CommandParserDump,"Serial last"},
 	{'_', CommandParserSerInfo,"Serial info"},
 
+
 #if ENABLEMODECOULOMB==1
 	{'C', CommandParserCoulomb,help_coulomb},
 #endif
@@ -185,7 +191,10 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 	{'i', CommandParserInfo,help_info},
 	{'c', CommandParserCallback,help_callback},
-	{'L', CommandParserModeModulation,"Modulation"},
+
+	{0,0,"---- User mode ----"},
+	{'1', CommandParserModeUser,"User mode (development/test)"},
+
 #endif
 
 };
