@@ -61,7 +61,7 @@ unsigned char CommandParserUSRTest2(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 
-	fprintf(file_pri,"Test function 1\n");
+	fprintf(file_pri,"Test function 2\n");
 
 
 	return 0;
