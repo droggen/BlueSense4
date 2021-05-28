@@ -198,6 +198,10 @@ void mode_dispatch(void)
 				mode_user();
 				system_mode=APP_MODE_MAIN;
 				break;
+			case APP_MODE_AD9834:
+				mode_ad9834();
+				system_mode=APP_MODE_MAIN;
+				break;
 			default:
 				system_mode=APP_MODE_MAIN;
 			

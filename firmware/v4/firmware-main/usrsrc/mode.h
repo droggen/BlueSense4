@@ -30,6 +30,7 @@
 #define APP_MODE_RTC_EXT 26
 #define APP_MODE_SERIALTEST 27
 #define APP_MODE_MODULATION 28
+#define APP_MODE_AD9834 29
 
 
 // User (non core firmware) modes

@@ -58,6 +58,7 @@
 #include "mode_dac.h"
 #include "mode_serial.h"
 #include "mode_modulation.h"
+#include "mode_ad9834.h"
 #include "mode_usr.h"
 
 #include "system-extra.h"
@@ -149,6 +150,7 @@ const COMMANDPARSER CommandParsersIdle[] =
 
 	{0,0,"---- Modulation ----"},
 	{'L', CommandParserModeModulation,"Modulation"},
+	{'l', CommandParserModeAD9834,"AD9834"},
 
 	{0,0,"---- Development/Test ----"},
 	{'K', CommandParserBenchmark,"Benchmarks"},
