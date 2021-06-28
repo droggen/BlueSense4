@@ -786,6 +786,8 @@ unsigned char CommandParserMPUTestN(char *buffer,unsigned char size)
 	If a parameter is passed, the rest of the string after the comma is stored
 	as boot script.
 	
+	To clear the boot script, pass "b,".
+
 	Parameters:
 		buffer	-		Pointer to the command string
 		size	-		Size of the command string
@@ -813,11 +815,13 @@ unsigned char CommandParserBootScript(char *buffer,unsigned char size)
 			fprintf(file_pri,"Boot script too long\n");
 			return 1;
 		}
+		char tmpbuf[CONFIG_ADDR_SCRIPTLEN];
+		strcpy(tmpbuf,buffer);
 		// Add a terminating newline (semicolon)
-		buffer[size++]=';';
-		buffer[size++]=0;
-		//printf("saving %d bytes\n",size);
-		ConfigSaveScript((char*)buffer,size);
+		strcat(tmpbuf,";");
+		fprintf(file_pri,"saving %d bytes\n",strlen(tmpbuf)+1);
+		// Save the string including the null char
+		ConfigSaveScript(tmpbuf,strlen(tmpbuf)+1);
 	}
 	
 	// Read and print script

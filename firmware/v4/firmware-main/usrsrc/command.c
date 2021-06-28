@@ -14,6 +14,7 @@
 #include "global.h"
 #include "command.h"
 #include "serial.h"
+#include "helper.h"
 
 
 /*
@@ -145,11 +146,11 @@ unsigned char CommandProcess(const COMMANDPARSER *CommandParsers,unsigned char C
 	Returns:
 		-
 ******************************************************************************/
-/*void _CommandPrint(void)
+void _CommandPrint(void)
 {
 	fprintf(file_pri,"CommandBuffer %d/%d: ",CommandBufferPtr,COMMANDMAXSIZE);
-	prettyprint_hexascii(file_pri,CommandBuffer,CommandBufferPtr);
-}*/
+	prettyprint_hexascii(file_pri,CommandBuffer,CommandBufferPtr,1);
+}
 /******************************************************************************
 	function: CommandGet
 *******************************************************************************	
@@ -180,96 +181,122 @@ unsigned char CommandGet(const COMMANDPARSER *CommandParsers,unsigned char Comma
 {
 	unsigned char rv;
 	short c;
-	static unsigned char quote=0;			// Indicates whether we are in a quotation mode, where the semicolon separator is not used to separate commands
-	
-	// Fast path: check if any key
-	if(!fischar(file_pri))
+	unsigned char quote=0;					// Indicates whether we are in a quotation mode, where the semicolon separator is not used to separate commands
+	static unsigned char newdata=1;			// By default assumes there is new data, as it could be loaded from the boot script
+
+	// Fast path: check if any key entered, and no new data in command (i.e. data which hasn't yet been looked at)
+	if(!fischar(file_pri) && newdata==0)
 		return 0;
 
 	// If connected to a primary source, read that source until the source is empty or the command buffer is full
 	// CommandBufferPtr indicates how many bytes are in the command buffer. The code below limits this to maximum COMMANDMAXSIZE.
+	// If too much data is read, flush the buffer and return an error.
 	if(file_pri)
 	{
-		while(CommandBufferPtr<COMMANDMAXSIZE)
+		while(1)
 		{
 			if((c=fgetc(file_pri)) == -1)
 				break;
+			if(CommandBufferPtr>=COMMANDMAXSIZE)
+			{
+				CommandBufferPtr=0;
+				return 3;
+			}
 			CommandBuffer[CommandBufferPtr++] = c;
+			newdata=1;	// Flag new data has been received
 		}
 	}
-	
+
 	// Fast path: command buffer empty
 	if(CommandBufferPtr==0)
 		return 0;
-	
+
+	//fprintf(file_pri,"Entering: ");
 	//_CommandPrint();		// Debug
-	
+
 	// Process the command buffer: search for the first command delimiter (cr, lf or ;)
 	for(unsigned char i=0;i<CommandBufferPtr;i++)
 	{
 		if(CommandBuffer[i]=='"')
 		{
-			//printf("Quote at %d\n",i);
+			// Quote detection is used to disable the detection of the semicolon.
 			quote=1-quote;			// Toggle the quotation mode
-			// the quotation byte must 'disappear' from the command string: shift left the string by 1 and decrease string length by 1
-			memmove(&CommandBuffer[i],&CommandBuffer[i+1],COMMANDMAXSIZE-1-i);			// Shift left by 1
-			CommandBufferPtr--;															// Decrease size of string by 1
-			// Decrease index by one, so that the loop processes the new character that moved in the current index.
-			i--;
-			//_CommandPrint();		// Debug
+			// Process next byte if any
 			continue;
 		}
+
 		if(CommandBuffer[i]==10 || CommandBuffer[i]==13 || (CommandBuffer[i]==';' && quote==0) )
 		{
-			// Found a command delimiter
-			//fprintf_P(file_pri,PSTR("Separator at %d\n"),i);		// Debug
-			
+			// Command delimiter found
+			// CommandBuffer[i]: delimiter, in-placed changed to 0
+			// Command and parameters from 0...i-1.
+
 			// Exit the quote mode. An unclosed quote in a command terminated by a CR or LF should not spread to the next command
 			quote=0;
-			
+
 			if(i==0)
 			{
 				// The command is empty: store the return value 'no command'.
 				// Do not return immediately, as the command buffer must be shifted by one, which is done below.
-				rv=0;		
+				rv=0;
 			}
 			else
 			{
-				// The command is non empty. Null-terminate the command
+				// Before executing, check if there are quotes to remove
+				// Search for all quotes from [0;i-1]
+				for(int qi = 0;qi<i;qi++)
+				{
+					if(CommandBuffer[qi]=='\"')
+					{
+						//fprintf(file_pri,"Remove quote at qi=%d\n",qi);
+						memmove(&CommandBuffer[qi],&CommandBuffer[qi+1],COMMANDMAXSIZE-qi-1);		// Shift left by 1 overwriting the opening quote
+						CommandBufferPtr--;															// Decrease size of string by 1
+						// Decrease index by one, so that the loop processes the new character that moved in the current index.
+						i--;
+						//_CommandPrint();		// Debug
+					}
+				}
+
+				// The command is non empty. Null-terminate the command, overwriting the CR, LF or semicolon
 				CommandBuffer[i] = 0;
-				
+
+
 				//fprintf_P(file_pri,PSTR("cmd string is '%s'\n"),CommandBuffer);			// Debug
 				// Decode the command
+				//fprintf(file_pri,"Command buffer before exec: i=%d ",i); prettyprint_hexascii(file_pri,CommandBuffer,i,1);
 				rv = CommandDecodeExec(CommandParsers,CommandParsersNum,CommandBuffer,i,msgid);
 				//fprintf_P(file_pri,PSTR("rv is: %d\n"),rv);								// Debug
 			}
+
+
+
 			//_CommandPrint();			// Debug
 			// Remove the processed command or character from the buffer by shifting the data out.
 			memmove(CommandBuffer,CommandBuffer+1+i,COMMANDMAXSIZE-1-i);
 			CommandBufferPtr-=1+i;
 			//_CommandPrint();			// Debug
+			/*if(rv==99)
+			{
+				// Decrease index by one, so that the loop processes the new character that moved in the current index.
+				i--;
+				continue;	// Swallow all the empty commands at once: command was empty, i..e cr+<nothing>+lf: try to read next char.
+			}*/
+			//fprintf(file_pri,"Leaving 1: ");
+			//_CommandPrint();		// Debug
 			return rv;
 		}
 	}
 	// If we arrive at this stage: either the command separator has not been read yet, or the command buffer is full.
-	if(CommandBufferPtr<COMMANDMAXSIZE)
-	{
-		// Do nothing if the command separator has not been read yet and the buffer is not full.
-		//printf("no nr|lf yet\n");
-		return 0;
-	}
-	// Here problem: the command buffer is full and no command separator has been received.
-	// This should not happen, as the command buffer is large enough compared to the command buffer.
-	// Likely gibberish is sent to the device.
-	// Choose to clear the buffer.
-	//fprintf_P(file_pri,PSTR("buff full clear\n"));
-	
-	// Clear buffer if buffer is full.
-	CommandBufferPtr=0;
-	// Return invalid message
-	return 3;	
-}
+	// There is not enough data for a command, so flag that no new data
+	newdata=0;
 
+	//fprintf(file_pri,"Leaving 2: ");
+	//_CommandPrint();		// Debug
+
+	// No command separator yet
+	return 0;
+
+}
 
 
 /******************************************************************************
