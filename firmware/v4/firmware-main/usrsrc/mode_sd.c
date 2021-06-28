@@ -2188,49 +2188,8 @@ unsigned char CommandParserSDDMA3(char *buffer,unsigned char size)
 
 void mode_sd(void)
 {
-	//unsigned char crc;
+	mode_run("SD",CommandParsersSD,CommandParsersSDNum);
 
-	/*crc=0;
-	crc = crc7(crc,0|0x40);
-	//crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-
-	crc=0;
-	crc = crc7(crc,0x11|0x40);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-	crc = crc7(crc,0);
-	printf("crc: %02X crcend: %02X\n",crc,crc7end(crc));
-
-	*/
-
-	fprintf(file_pri,"SD>\n");
-
-	while(1)
-	{
-	//	fprintf_P(file_pri,PSTR("Some ADC stuff: %d. period: %d. mask: %02X. pri: %p dbg: %p\n"),ctr,mode_adc_period,mode_adc_mask,file_pri,file_dbg);
-
-		CommandProcess(CommandParsersSD,CommandParsersSDNum);
-		if(CommandShouldQuit())
-			break;
-
-	}
-	fprintf(file_pri,"<SD\n");
 }
 
 

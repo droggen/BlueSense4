@@ -56,7 +56,7 @@ const COMMANDPARSER CommandParsersADCTST[] =
 	{'2', CommandParserADCTest2,"stuff"},
 	{'3', CommandParserADCTest3,"stuff"},
 	{'d', CommandParserADCTestDMA,"DMA"},
-	{'b', CommandParserADCTestB,"bench"},
+	//{'b', CommandParserADCTestB,"bench"},
 	{'A', CommandParserADCAcquire,"A,<channelmask>,<vbat>,<vref>,<temp>,<dt_us> Acquire every specified us microsecond."},
 	{'R', CommandParserADCReadCont,"read continuously"},
 	{'r', CommandParserADCRead,"read"},
