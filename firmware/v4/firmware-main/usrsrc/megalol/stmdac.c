@@ -267,7 +267,7 @@ void _stm_dac_cosinegenerator_initwaveforms(unsigned n,...)
 	Signal generator callback function for superposition of cosines.
 
 *******************************************************************************/
-void stm_dac_cosinegenerator_siggen(unsigned short *buffer,unsigned n)
+void stm_dac_cosinegenerator_siggen(unsigned short *restrict buffer,unsigned n)
 {
 	for(unsigned i=0;i<n;i++)
 	{

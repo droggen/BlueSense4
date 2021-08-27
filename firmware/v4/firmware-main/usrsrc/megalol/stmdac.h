@@ -15,9 +15,12 @@ extern unsigned short _stm_dac_cos_lut[];
 extern unsigned short _stm_dac_dmabuf[];			// DMA tempory buffer - DMA uses double buffering so buffer twice the size of DACDMABUFSIZ
 
 extern unsigned int _stm_dac_dacclock;				// DAC clock in Hz
+extern unsigned int _stm_dac_cosinegenerator_numwaveforms;					// Number of simultaneously generated waveforms
+extern unsigned int _stm_dac_lut_index[];		// LUT index in 16.16 format
+extern unsigned int _stm_dac_lut_incr[];		// LUT increment in 16.16 format
+extern unsigned int _stm_dac_waveform_vol[];	// Volume from 0 to 4095
 
-
-void stmdac_init(unsigned int samplerate,void (*cb)(unsigned short *buffer,unsigned int n));
+void stmdac_init(unsigned int samplerate,void (*cb)(unsigned short * restrict buffer,unsigned int n));
 void stmdac_deinit();
 int stm_dac_cosinegenerator_addwaveform(unsigned freq, unsigned vol);
 void _stm_dac_clearwaveforms();
@@ -25,7 +28,7 @@ void stm_dac_clearstat();
 void stmdac_setval();
 unsigned stmdac_getval();
 void stm_dac_cosinegenerator_init();
-void stm_dac_cosinegenerator_siggen(unsigned short *buffer,unsigned n);
+void stm_dac_cosinegenerator_siggen(unsigned short *restrict buffer,unsigned n);
 #if 0
 void _stm_dac_cosinegenerator_initwaveforms(unsigned n,...);
 #endif
