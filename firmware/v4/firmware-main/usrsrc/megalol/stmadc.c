@@ -18,7 +18,10 @@
 
 unsigned short _stm_adc_buffer_rdptr,_stm_adc_buffer_wrptr;
 
-//
+// Mapping of bluesense channels to STM channels
+uint32_t bs2stmmap[_stm_adc_bs2maxchannel] = 	{ADC_CHANNEL_1, 		ADC_CHANNEL_2, 		ADC_CHANNEL_4, 		ADC_CHANNEL_13, 	ADC_CHANNEL_9, 		ADC_CHANNEL_VBAT, 	ADC_CHANNEL_VREFINT, 	ADC_CHANNEL_TEMPSENSOR};
+uint32_t bs2stmrank[_stm_adc_bs2maxchannel] = 	{ADC_REGULAR_RANK_1,	ADC_REGULAR_RANK_2,	ADC_REGULAR_RANK_3,	ADC_REGULAR_RANK_4,	ADC_REGULAR_RANK_5,	ADC_REGULAR_RANK_6,	ADC_REGULAR_RANK_7,		ADC_REGULAR_RANK_8};
+
 #define DMABUFSIZ STM_ADC_MAXCHANNEL*STM_ADC_MAXGROUPING*2						// We sample up to STM_ADC_MAXGROUPING times, before triggering an interrupt
 
 unsigned short _stm_adc_dmabuf[DMABUFSIZ];										// DMA tempory buffer - DMA uses double buffering so buffer twice the size of the payload (maxchannel)
@@ -32,8 +35,40 @@ unsigned long _stm_adc_ctr_acq,_stm_adc_ctr_loss;								// DMA acquisition stat
 // pins and ports hold the pin and port of each BS4 ADC input.
 uint32_t _stm_adc_pins[5] = 		{X_0_ADC0_Pin,			X_1_ADC1_Pin,		X_2_ADC2_Pin,		X_3_ADC3_Pin,		X_4_ADC_DAC_Pin};
 GPIO_TypeDef  *_stm_adc_ports[5]=	{X_0_ADC0_GPIO_Port,	X_1_ADC1_GPIO_Port,	X_2_ADC2_GPIO_Port,	X_3_ADC3_GPIO_Port,	X_4_ADC_DAC_GPIO_Port};
-unsigned _stm_adc_channels;														// Holds the currenly select channels for conversions
+unsigned _stm_adc_channels;														// Holds the currently select channels for conversions
 
+
+
+/*
+	Refactoring concept
+
+	_stm_adc_dmabuf: instead of being defined by a fixed grouping, set a fixed size and compute the grouping dynamically.
+
+
+*/
+/******************************************************************************
+	file: stmadc.c
+*******************************************************************************
+
+
+	*Hardware characteristics*
+
+	* ADC: ADC1 - on which bus
+	* Timer to trigger ADC: TIM15 on APB2
+
+
+
+	*Development information*
+
+	* Main functions*
+
+
+	Data acquisition
+		*
+
+	Statistics
+		*
+*/
 /*
 DMA must be configured as circular; DMA transfer must be twice the size of the payload to use double buffering.
 Normal mode DMA stops (and doesn't respond to triggers) once the payload is transfered.
@@ -159,9 +194,8 @@ void stm_adc_acquire_start_us(unsigned char channels,unsigned char vbat,unsigned
 	if(divider<0) divider=0;				// Minimum divider is 0 (5uS sample period)
 
 	_stm_adc_acquire_start(channels,vbat,vref,temp,prescaler,divider);
-
-
 }
+
 /******************************************************************************
 function: _stm_adc_acquire_start
 *******************************************************************************
@@ -259,38 +293,23 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 
 	//ADC_TypeDef *adc = hadc1.Instance;
 
-	const unsigned bs2maxchannel = 8;
 
-	// Mapping of bluesense channels to STM channels
-	uint32_t bs2stmmap[8] = 	{ADC_CHANNEL_1, 		ADC_CHANNEL_2, 		ADC_CHANNEL_4, 		ADC_CHANNEL_13, 	ADC_CHANNEL_9, 		ADC_CHANNEL_VBAT, 	ADC_CHANNEL_VREFINT, 	ADC_CHANNEL_TEMPSENSOR};
-	uint32_t bs2stmrank[8] = 	{ADC_REGULAR_RANK_1,	ADC_REGULAR_RANK_2,	ADC_REGULAR_RANK_3,	ADC_REGULAR_RANK_4,	ADC_REGULAR_RANK_5,	ADC_REGULAR_RANK_6,	ADC_REGULAR_RANK_7,		ADC_REGULAR_RANK_8};
-	/*uint32_t *sqr[bs2maxchannel] = 		{ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,
+
+
+	/*uint32_t *sqr[_stm_adc_bs2maxchannel] = 		{ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,ADC1_BASE+0x30,
 							ADC1_BASE+0x34,ADC1_BASE+0x34,ADC1_BASE+0x34,ADC1_BASE+0x34};
 	unsigned sqroff[bs2maxchannel]=		{6,12,18,24,0,6,12,18};*/
 
 
-	for(int i=0;i<bs2maxchannel;i++)
+	for(int i=0;i<_stm_adc_bs2maxchannel;i++)
 	{
 		fprintf(file_pri,"Channel %d: %08X\n",i,(unsigned)bs2stmmap[i]);
 	}
+	// Append the additional channels: vbat, vref, temp in the order <temp><vfref><vbat><int4><int3><int2><int1><int0>
+	channels = _stm_adc_channels_to_bitmap(channels,vbat,vref,temp);
+	_stm_adc_channels = channels;						// Save this for future de-initialisation
+	int nconv = _stm_adc_channels_count(channels);		// Number of active channels for DMA grouping
 
-	channels&=0b11111;			// BlueSense has 5 external ADC inputs
-	// Append the additional channels: vbat, vref, temp in this order
-	if(vbat) channels|=0b100000;
-	if(vref) channels|=0b1000000;
-	if(temp) channels|=0b10000000;
-
-	_stm_adc_channels = channels;		// Save this for future de-initialisation
-
-
-
-
-	int nconv=0;
-	for(int i=0;i<bs2maxchannel;i++)
-	{
-		if(_stm_adc_channels&(1<<i))
-			nconv++;
-	}
 
 	fprintf(file_pri,"Channels: %X. Number of conversions in a scan: %u\n",_stm_adc_channels,nconv);
 
@@ -353,7 +372,7 @@ unsigned char stm_adc_init(unsigned char channels,unsigned char vbat,unsigned ch
 
 	// Config all the chnanels
 	int rankidx = 0;
-	for(int i=0;i<bs2maxchannel;i++)
+	for(int i=0;i<_stm_adc_bs2maxchannel;i++)
 	{
 		if( !(channels&(1<<i)) )
 			continue;
@@ -392,6 +411,56 @@ void stm_adc_deinit()
 }
 
 /******************************************************************************
+	function: _stm_adc_channels_to_bitmap
+*******************************************************************************
+	Append the internal channels to the list of external channels in the order:
+
+	<temp><vfref><vbat><int4><int3><int2><int1><int0>
+
+
+	Parameters:
+		extchannels	-	Bitmask of BlueSense channels: bit 0=X0_ADC0; bit 4 = X4_ADC4
+		vbat		-	1 to acquire vbat
+		vref		-	1 to acquire vref
+		temp		-	1 to acquire temp
+
+	Returns:
+		-
+******************************************************************************/
+unsigned char _stm_adc_channels_to_bitmap(unsigned char extchannels,unsigned char vbat,unsigned char vref,unsigned char temp)
+{
+	extchannels&=0b11111;			// BlueSense has 5 external ADC inputs
+	// Append the additional channels: vbat, vref, temp in this order
+	if(vbat) extchannels|=0b100000;
+	if(vref) extchannels|=0b1000000;
+	if(temp) extchannels|=0b10000000;
+	return extchannels;
+}
+/******************************************************************************
+	function: _stm_adc_channels_count
+*******************************************************************************
+	Count the number of channels selected (i.e. popcount).
+
+	<temp><vfref><vbat><int4><int3><int2><int1><int0>
+
+
+	Parameters:
+		channels	-	Bitmask of selected channels
+
+	Returns:
+		popcount(channels)
+******************************************************************************/
+int _stm_adc_channels_count(unsigned char channels)
+{
+	int nconv=0;
+	for(int i=0;i<_stm_adc_bs2maxchannel;i++)
+	{
+		if(_stm_adc_channels&(1<<i))
+			nconv++;
+	}
+	return nconv;
+}
+/******************************************************************************
 	function: stm_adc_init_gpiotoadc
 *******************************************************************************
 	Initialise the BS2 ADC pins to ADC mode.
@@ -407,7 +476,7 @@ void stm_adc_init_gpiotoadc(unsigned char channels)
 {
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-	// Iterate all the channels
+	// Iterate all the external channels
 	for(int i=0;i<5;i++)
 	{
 		if(channels&(1<<i))
@@ -601,7 +670,7 @@ unsigned short stm_adc_data_level(void)
 /******************************************************************************
 	function: stm_adc_data_clear
 *******************************************************************************
-	Resets the audio frame buffer
+	Resets the ADC buffers
 *******************************************************************************/
 void stm_adc_data_clear(void)
 {
@@ -698,6 +767,11 @@ unsigned char stm_adc_acquirecontinuously(unsigned grouping)
 	// Clear DMA buffer for debugging purposes
 	memset(_stm_adc_dmabuf,0xff,DMABUFSIZ*sizeof(unsigned short));
 
+	// Install the callbacks
+	_stm_adc_effective_callback_conv_cplt=_stm_adc_callback_conv_cplt;
+	_stm_adc_effective_callback_conv_half_cplt=_stm_adc_callback_conv_half_cplt;
+
+
 	s = HAL_ADC_Start_DMA(&hadc1,(uint32_t*)_stm_adc_dmabuf,hadc1.Init.NbrOfConversion*grouping*2);		// Twice number of conversion to use double buffering
 
 	fprintf(file_pri,"HAL_ADC_Start_DMA: %d\n",s);
@@ -710,6 +784,11 @@ unsigned char stm_adc_acquirecontinuously(unsigned grouping)
 	Stores the acquired data in the ADC buffer
 *******************************************************************************/
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+	_stm_adc_effective_callback_conv_cplt(hadc); // Call effectively installed callback
+
+}
+void _stm_adc_callback_conv_cplt(ADC_HandleTypeDef *hadc)
 {
 	unsigned long t = timer_ms_get();
 
@@ -756,6 +835,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	Double buffering: copy first half of DMA buffer
 *******************************************************************************/
 void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef *hadc)
+{
+	_stm_adc_effective_callback_conv_half_cplt(hadc); // Call effectively installed callback
+}
+void _stm_adc_callback_conv_half_cplt(ADC_HandleTypeDef *hadc)
 {
 	unsigned long t = timer_ms_get();
 #if 0

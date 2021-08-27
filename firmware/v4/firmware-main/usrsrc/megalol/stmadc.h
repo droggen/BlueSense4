@@ -8,6 +8,10 @@
 #ifndef MEGALOL_STMADC_H_
 #define MEGALOL_STMADC_H_
 
+#include "main.h"
+
+#define _stm_adc_bs2maxchannel  8
+
 //#define STM_ADC_BUFFER_NUM		128					// Number of entries in the ADC buffers
 //#define STM_ADC_BUFFER_NUM		256					// Number of entries in the ADC buffers
 //#define STM_ADC_BUFFER_NUM		512					// Number of entries in the ADC buffers
@@ -23,6 +27,13 @@
 
 
 extern unsigned short _stm_adc_dmabuf[];
+extern unsigned _stm_adc_channels;					// Holds the currently select channels for conversions
+
+extern uint32_t bs2stmmap[];
+extern uint32_t bs2stmrank[];
+extern uint32_t _stm_adc_pins[];
+extern GPIO_TypeDef  *_stm_adc_ports[];
+
 
 void stm_adc_data_clear(void);
 
@@ -45,7 +56,15 @@ void stm_adc_init_gpiotoadc(unsigned char channels);
 void stm_adc_deinit_gpiotoanalog(unsigned char channels);
 void _stm_adc_init_timer(unsigned prescaler,unsigned reload);
 void _stm_adc_deinit_timer();
+unsigned char _stm_adc_channels_to_bitmap(unsigned char extchannels,unsigned char vbat,unsigned char vref,unsigned char temp);
+int _stm_adc_channels_count(unsigned char channels);
 unsigned long stm_adc_perfbench_withreadout(unsigned long mintime);
 unsigned stm_rcc_get_apb2_timfrq();
+void _stm_adc_callback_conv_cplt(ADC_HandleTypeDef *hadc);
+void _stm_adc_callback_conv_half_cplt(ADC_HandleTypeDef *hadc);
+// Need to adjust the employed callbacks depending on ADC or ADCFAST library
+void (*_stm_adc_effective_callback_conv_cplt)(ADC_HandleTypeDef *hadc);				// Pointer to full conversion callback
+void (*_stm_adc_effective_callback_conv_half_cplt)(ADC_HandleTypeDef *hadc);		// Pointer to half conversion callback
+
 
 #endif /* MEGALOL_STMADC_H_ */
