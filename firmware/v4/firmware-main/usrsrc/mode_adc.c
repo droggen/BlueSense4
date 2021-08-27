@@ -14,8 +14,11 @@
 #include "helper.h"
 #include "wait.h"
 #include "stmadc.h"
+#include "stmadcfast.h"
 #include "tim.h"
 #include "serial_usb.h"
+#include "mode_main.h"
+#include "ufat.h"
 
 /*
 Max application sample frequency: 10KHz
@@ -68,6 +71,12 @@ const COMMANDPARSER CommandParsersADCTST[] =
 	{'x', CommandParserADCTestComplete,"Complete test"},
 
 	{'f', CommandParserADCTestFgetc,"fgetc test"},
+	{0,0,"---- ADCFast ----"},
+	{'S',CommandParserADCFastStart,"Start acquisition"},
+	{'s',CommandParserADCFastStop,"Stop acquisition"},
+	{'k',CommandParserADCFastBenchmark,"Benchmark"},
+	{'M',CommandParserADCFastBenchmarkMem,"Benchmark memory transfer"},
+	{'Q',CommandParserADCFastAcq,"Q,<channels>,<divider>,<log> Acquire ADC channels and store to log file"},
 
 };
 unsigned char CommandParsersADCTSTNum=sizeof(CommandParsersADCTST)/sizeof(COMMANDPARSER);
@@ -271,7 +280,7 @@ unsigned char CommandParserADCTestDMA(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 
-
+#if 0
 	//LL_ADC_REG_StartConversion(ADC1);
 	//HAL_ADC_Start(&hadc1);
 
@@ -279,13 +288,14 @@ unsigned char CommandParserADCTestDMA(char *buffer,unsigned char size)
 	//HAL_TIM_Base_Start_IT
 
 	//HAL_StatusTypeDef s = HAL_ADC_Start_IT(&hadc1);
-	HAL_StatusTypeDef s = HAL_ADC_Start_DMA(&hadc1,(uint32_t*)_stm_adc_dmabuf,hadc1.Init.NbrOfConversion);
+
 	/*LL_TIM_EnableIT_UPDATE(TIM15);
 	LL_TIM_EnableUpdateEvent(TIM15);
 	LL_TIM_EnableCounter(TIM15);
 	LL_TIM_GenerateEvent_UPDATE(TIM15);*/
 
 	return 0;
+#endif
 #if 0
 	HAL_StatusTypeDef s;
 	int dma;
@@ -448,7 +458,7 @@ unsigned char CommandParserADCTestReg(char *buffer,unsigned char size)
 	sq = (unsigned)adc->SQR2;
 	fprintf(file_pri,"sq5: %d sq6: %d sq7: %d sq8: %d sq9: %d\n",(sq>>0)&0b11111,(sq>>6)&0b11111,(sq>>12)&0b11111,(sq>>18)&0b11111,(sq>>24)&0b11111);
 
-	fprintf(file_pri,"CR: %08X\n",adc->CR);
+	fprintf(file_pri,"CR: %08X\n",(unsigned)adc->CR);
 
 	return 0;
 }
@@ -478,7 +488,7 @@ unsigned char CommandParserADCTestTimerInit(char *buffer,unsigned char size)
 	if(ParseCommaGetInt(buffer,2,&prescaler,&reload))
 		return 2;
 
-	fprintf(file_pri,"Prescaler: %lu Reload: %lu\n",prescaler,reload);
+	fprintf(file_pri,"Prescaler: %u Reload: %u\n",prescaler,reload);
 	_stm_adc_init_timer(prescaler,reload);
 
 	return 0;
@@ -646,7 +656,7 @@ unsigned char CommandParserADCTestFgetc(char *buffer,unsigned char size)
 		fgetc(file_pri);
 	}
 	t2 = timer_us_get();
-	fprintf(file_pri,"fgetc time: %lu us for %u calls. %u us/call\n",t2-t1,n,(t2-t1)/n);
+	fprintf(file_pri,"fgetc time: %lu us for %u calls. %lu us/call\n",t2-t1,n,(t2-t1)/n);
 
 	t1 = timer_us_get();
 	for(unsigned i=0;i<n;i++)
@@ -654,7 +664,7 @@ unsigned char CommandParserADCTestFgetc(char *buffer,unsigned char size)
 		fread(&buf,1,1,file_pri);
 	}
 	t2 = timer_us_get();
-	fprintf(file_pri,"fread time: %lu us for %u calls. %u us/call\n",t2-t1,n,(t2-t1)/n);
+	fprintf(file_pri,"fread time: %lu us for %u calls. %lu us/call\n",t2-t1,n,(t2-t1)/n);
 
 
 	t1 = timer_us_get();
@@ -664,8 +674,238 @@ unsigned char CommandParserADCTestFgetc(char *buffer,unsigned char size)
 		nnn+=fischar(file_pri);
 	}
 	t2 = timer_us_get();
-	fprintf(file_pri,"buffer_get time: %lu us for %u calls. %u us/call (%u)\n",t2-t1,n,(t2-t1)/n,nnn);
+	fprintf(file_pri,"buffer_get time: %lu us for %u calls. %lu us/call (%lu)\n",t2-t1,n,(t2-t1)/n,nnn);
 
 
 	return 0;
 }
+unsigned char CommandParserADCFastStart(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	unsigned prescaler=1;
+	unsigned reload=1;
+	int periodus=50000;
+
+
+	// Calculate the prescaler and divider
+
+	// Prescaler: maps from TIM frequency to 5uS period (5uS <> 200KHz).
+
+	int timclk = stm_rcc_get_apb2_timfrq();
+
+
+	prescaler = (timclk/200000)-1;			// Subract one as frequency is divided by prescaler+1
+
+	// Calculates divider, rouding to lower values;
+	reload = (periodus/5)-1;				// Subtract one as frequency is divided by divider+1
+	if(reload<0) reload=0;				// Minimum divider is 0 (5uS sample period)
+
+	unsigned timerfrequency = timclk/(prescaler+1)/(reload+1);	// Number of interrupt per seconds assuming one interrupt per sample
+
+	fprintf(file_pri,"APB2 clock: %d\n",timclk);
+	fprintf(file_pri,"TIM15 frequency: %d\n",timerfrequency);
+
+
+
+
+	fprintf(file_pri,"Prescaler: %u\n",prescaler);
+	fprintf(file_pri,"Reload: %u\n",reload);
+
+	stm_adcfast_acquire_start(0b11111,1,1,1,prescaler,reload);
+	//stm_adcfast_acquire_start(0b11111,0,0,0,prescaler,reload);
+	//stm_adcfast_acquire_start(0,1,1,1,prescaler,reload);
+
+
+	return 0;
+}
+unsigned char CommandParserADCFastStop(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+	stm_adcfast_acquire_stop();
+
+	// Print statistics
+	fprintf(file_pri,"Buffer level: %d. Frames tot: %lu. Frames lots: %lu\n",stm_adcfast_data_level(),stm_adcfast_stat_totframes(),stm_adcfast_stat_lostframes());
+
+	return 0;
+}
+unsigned char CommandParserADCFastBenchmark(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+	int timclk = stm_rcc_get_apb2_timfrq();
+
+	// Benchmark various speeds
+	// At 32MHz: 65535: 488Hz; 7: 4MHz
+	unsigned divider[12]={65535, 16383, 4095, 1023, 255, 63, 23, 18, 17, 16, 15, 7};
+	unsigned prescaler=0;
+	unsigned mintime=1;
+	//unsigned t_last,t_cur;
+	long int perf,refperf;
+
+	stm_adcfast_acquire_stop();
+	unsigned long p = stm_adcfast_perfbench_withreadout(mintime);
+	refperf=p;
+	fprintf(file_pri,"Reference performance: %lu\n",p);
+
+
+	for(unsigned si = 0;si<12;si++)
+	{
+		unsigned timerfrequency = timclk/(prescaler+1)/(divider[si]+1);	// Number of samples per second
+
+
+		// Prescaler=0, play only with divider
+		stm_adcfast_acquire_start(0b1,0,0,0,0,divider[si]);
+
+		/*t_last=timer_s_wait();
+		stm_adcfast_data_clear();			// Clear data buffer and statistics
+
+		while((t_cur=timer_s_get())-t_last<mintime);*/
+
+		perf = stm_adcfast_perfbench_withreadout(mintime);
+
+
+		stm_adcfast_acquire_stop();
+
+
+		long load = 100-(perf*100/refperf);
+		if(load<0)
+			load=0;
+
+		fprintf(file_pri,"\tBenchmark sampling at %u Hz. Divider = %u. perf: %lu (instead of %lu). CPU load %lu %%\n",timerfrequency,divider[si],perf,refperf,load);
+		fprintf(file_pri,"\tBuffer level: %d. Frames tot: %lu. Frames lots: %lu\n",stm_adcfast_data_level(),stm_adcfast_stat_totframes(),stm_adcfast_stat_lostframes());
+
+	}
+
+	return 0;
+}
+
+
+
+unsigned char CommandParserADCFastBenchmarkMem(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+
+
+	unsigned mintime=1;
+	unsigned t_last,t_cur;
+	unsigned long t1,t2;
+	unsigned fps,n;
+
+	// Benchmark the memory transfer within the interrupt routine.
+	stm_adcfast_data_clear();
+	t_last=timer_s_wait();
+	t1=timer_ms_get();
+	n=0;
+	while((t_cur=timer_s_get())-t_last<mintime)
+	{
+		_stm_adcfast_data_storenext(_stm_adcfast_dmabuf,timer_ms_get());
+		n++;
+	}
+	t2=timer_ms_get();
+
+	fprintf(file_pri,"Benchmark storenext:\n");
+	fps = n/(t_cur-t_last);
+	fprintf(file_pri,"\t%u iterations in %u seconds (%lu ms). Frame per second: %u\n",n,t_cur-t_last,t2-t1,fps);
+	fprintf(file_pri,"\tFrame size: %u short %u bytes\n",ADCFAST_BUFFERSIZE,ADCFAST_BUFFERSIZE*sizeof(short));
+	fprintf(file_pri,"\tMaximum sample rate: %u Sps. Memory transfer speed: %u b/s\n",fps*ADCFAST_BUFFERSIZE,fps*ADCFAST_BUFFERSIZE*sizeof(short));
+
+	// Benchmark the memory transfer within the interrupt routine and from main application
+	stm_adcfast_data_clear();
+	unsigned short adctmp[ADCFAST_BUFFERSIZE];
+	unsigned effsize;
+	unsigned long timems, pktctr;
+	t_last=timer_s_wait();
+	t1=timer_ms_get();
+	n=0;
+	while((t_cur=timer_s_get())-t_last<mintime)
+	{
+		_stm_adcfast_data_storenext(_stm_adcfast_dmabuf,timer_ms_get());
+		stm_adcfast_data_getnext(adctmp,&effsize,&timems,&pktctr);
+		n++;
+	}
+	t2=timer_ms_get();
+
+	fprintf(file_pri,"Benchmark storenext+getnext:\n");
+	fps = n/(t_cur-t_last);
+	fprintf(file_pri,"\t%u iterations in %u seconds (%lu ms). Frame per second: %u\n",n,t_cur-t_last,t2-t1,fps);
+	fprintf(file_pri,"\tFrame size: %u short %u bytes\n",ADCFAST_BUFFERSIZE,ADCFAST_BUFFERSIZE*sizeof(short));
+	fprintf(file_pri,"\tMaximum sample rate: %u Sps. Memory transfer speed: %u b/s\n",fps*ADCFAST_BUFFERSIZE,fps*ADCFAST_BUFFERSIZE*sizeof(short)*2);
+
+
+
+
+	return 0;
+}
+
+
+unsigned char CommandParserADCFastAcq(char *buffer,unsigned char size)
+{
+	(void)size; (void) buffer;
+	unsigned divider,log,channels;
+
+	if(ParseCommaGetUnsigned(buffer,3,&channels,&divider,&log))
+		return 2;
+#if 1
+
+	unsigned mintime=1;
+	unsigned t_last,t_cur;
+	unsigned prescaler=0;
+
+
+	// Acquire data, wait, stop then store
+	stm_adcfast_acquire_stop();
+
+	unsigned timclk = stm_rcc_get_apb2_timfrq();
+	unsigned timerfrequency = timclk/(prescaler+1)/(divider+1);	// Number of samples per second
+	fprintf(file_pri,"Acquisition of channels %02uh at %u Hz\n",channels,timerfrequency);
+
+
+	// Prescaler=0, play only with divider
+	stm_adcfast_acquire_start(channels,0,0,0,0,divider);
+
+	t_last=timer_s_wait();
+	stm_adcfast_data_clear();			// Clear data buffer and statistics
+	while((t_cur=timer_s_get())-t_last<mintime);
+	stm_adcfast_acquire_stop();
+
+
+	// Write to log file.
+	fprintf(file_pri,"Store to log %u\n",log);
+	if(!ufat_available())
+	{
+		fprintf(file_pri,"No filesystem available\n");
+		// Return an error
+		return 1;
+	}
+#endif
+	FILE *f = ufat_log_open(log);
+	if(!f)
+	{
+		fprintf(file_pri,"Error opening log\n");
+		return 1;
+	}
+	// Write all the data
+
+	unsigned short b[ADCFAST_BUFFERSIZE];
+	unsigned effsize;
+	unsigned long timems,pktctr;
+	while(!stm_adcfast_data_getnext(b,&effsize,&timems,&pktctr))
+	{
+		fprintf(f,"%u %lu %lu ",effsize,timems,pktctr);
+		for(unsigned i=0;i<ADCFAST_BUFFERSIZE;i++)
+			fprintf(f,"%05u ",b[i]);
+		fprintf(f,"\n");
+	}
+
+
+	ufat_log_close();
+
+
+
+
+
+	return 0;
+}
+
+

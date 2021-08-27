@@ -31,4 +31,11 @@ unsigned char CommandParserADCBench(char *buffer,unsigned char size);
 unsigned char CommandParserADCTestFgetc(char *buffer,unsigned char size);
 
 
+unsigned char CommandParserADCFastStart(char *buffer,unsigned char size);
+unsigned char CommandParserADCFastStop(char *buffer,unsigned char size);
+unsigned char CommandParserADCFastBenchmark(char *buffer,unsigned char size);
+unsigned char CommandParserADCFastBenchmarkMem(char *buffer,unsigned char size);
+unsigned char CommandParserADCFastAcq(char *buffer,unsigned char size);
+
+
 #endif /* MODE_ADC_H_ */
