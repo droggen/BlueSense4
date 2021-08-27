@@ -114,3 +114,11 @@ unsigned stm_rcc_get_apb1_timfrq()
 	return timclk;
 }
 
+unsigned stm_rcc_get_apb1_frq()
+{
+	unsigned timclk;
+	unsigned pclk = HAL_RCC_GetPCLK1Freq();
+	fprintf(file_pri,"APB1 peripheral clock: %u\n",pclk);
+	return pclk;
+}
+

@@ -10,5 +10,6 @@
 
 unsigned stm_rcc_get_apb1_timfrq();
 unsigned stm_rcc_get_apb2_timfrq();
+unsigned stm_rcc_get_apb1_frq();
 
 #endif /* MEGALOL_STMRCC_H_ */
