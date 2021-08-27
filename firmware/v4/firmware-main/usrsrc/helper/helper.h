@@ -68,11 +68,19 @@ void str2xxyyzz(char *string,unsigned char *x,unsigned char *y,unsigned char *z)
 
 void prettyprint_hexascii(FILE *f,char *string,unsigned short n,unsigned char nl);
 
-/*void hist_init(unsigned long *hist,unsigned short n);
+void hist_init(unsigned long *hist,unsigned short n);
 void hist_insert(unsigned long *hist,unsigned short n,unsigned short width,unsigned short value);
-
+void hist_print(FILE *file_pri,unsigned long *hist,unsigned short n,unsigned short width);
+/*
 void slist_add(unsigned long *slist,int n,unsigned long v);
 */
 void print_bin(FILE *f,char *buffer,unsigned s);
+
+
+void print_array_short(FILE *file_pri,short *data,unsigned datalen);
+void print_array_char(FILE *file_pri,char *data,unsigned datalen);
+void print_array_int(FILE *file_pri,int *data,unsigned datalen);
+void print_array_inth(FILE *file_pri,int *data,unsigned datalen);
+void scope_plot(FILE *file_pri,short *data,unsigned len,unsigned div,unsigned maxval,unsigned overlay);
 
 #endif

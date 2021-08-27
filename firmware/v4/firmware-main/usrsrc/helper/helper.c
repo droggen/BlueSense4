@@ -1024,10 +1024,10 @@ void prettyprint_hexascii(FILE *f,char *string,unsigned short n,unsigned char nl
 	Returns:
 		-
 ******************************************************************************/
-/*void hist_init(unsigned long *hist,unsigned short n)
+void hist_init(unsigned long *hist,unsigned short n)
 {
 	memset(hist,0,n*sizeof(unsigned long));
-}*/
+}
 
 /******************************************************************************
 	function: hist_insert
@@ -1050,7 +1050,7 @@ void prettyprint_hexascii(FILE *f,char *string,unsigned short n,unsigned char nl
 	Returns:
 		-
 ******************************************************************************/
-/*void hist_insert(unsigned long *hist,unsigned short n,unsigned short width,unsigned short value)
+void hist_insert(unsigned long *hist,unsigned short n,unsigned short width,unsigned short value)
 {
 	unsigned short idx;
 	
@@ -1066,7 +1066,19 @@ void prettyprint_hexascii(FILE *f,char *string,unsigned short n,unsigned char nl
 	}
 	hist[idx]++;
 }
-*/
+void hist_print(FILE *file_pri,unsigned long *hist,unsigned short n,unsigned short width)
+{
+	// Print histogram
+	for(int i=0;i<n;i++)
+	{
+		fprintf(file_pri,"%04d-%04d: %05d ",i*width,i*width+width-1,hist[i]);
+		// Plot stars: one star for every 16 entries in bin, rounded up.
+		int ns = (hist[i]+15)/16;		// Round up
+		for(int j=0;j<ns;j++)
+			fprintf(file_pri,"*");
+		fprintf(file_pri,"\n");
+	}
+}
 
 /******************************************************************************
 	function: slist_add
@@ -1121,3 +1133,60 @@ void print_bin(FILE *f,char *buffer,unsigned s)
 	fprintf(f,"\n");
 }
 
+void print_array_short(FILE *file_pri,short *data,unsigned datalen)
+{
+	for(unsigned i=0;i<datalen;i++) fprintf(file_pri,"%d ",data[i]); fprintf(file_pri,"\n");
+}
+void print_array_char(FILE *file_pri,char *data,unsigned datalen)
+{
+	for(unsigned i=0;i<datalen;i++) fprintf(file_pri,"%u ",(unsigned)data[i]); fprintf(file_pri,"\n");
+}
+void print_array_int(FILE *file_pri,int *data,unsigned datalen)
+{
+	for(unsigned i=0;i<datalen;i++) fprintf(file_pri,"%d ",data[i]); fprintf(file_pri,"\n");
+}
+void print_array_inth(FILE *file_pri,int *data,unsigned datalen)
+{
+	for(unsigned i=0;i<datalen;i++) fprintf(file_pri,"%08x ",data[i]); fprintf(file_pri,"\n");
+}
+/******************************************************************************
+	function: scope_plot
+*******************************************************************************
+	Plot a scope vertically
+
+
+	maxval		-		Maximum input value, e.g. 4095 for 12-bit number
+
+******************************************************************************/
+void scope_plot(FILE *file_pri,short *data,unsigned len,unsigned div,unsigned maxval,unsigned overlay)
+{
+
+	unsigned ns = maxval/div;	// Stars from 0 to ns inclusive.
+	unsigned mp = maxval/2/div;		// Middle position
+
+	// ESC [ pn A
+	if(overlay)
+		fprintf(file_pri,"\x1b[%dA",len);
+
+	for(unsigned si=0;si<len;si++)
+	{
+		fprintf(file_pri,"|");
+		short s = data[si];
+		s/=div;
+		// Plot a star at position s.
+		for(unsigned i=0;i<=ns;i++)
+		{
+			if(i==s)
+				fprintf(file_pri,"*");
+			else
+			{
+				if(i==mp)
+					fprintf(file_pri,".");
+				else
+					fprintf(file_pri," ");
+			}
+		}
+		fprintf(file_pri,"|\n");
+	}
+	//fprintf(file_pri,"arch");
+}
