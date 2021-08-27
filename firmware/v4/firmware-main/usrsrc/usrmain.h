@@ -20,8 +20,18 @@ extern FILE *file_itm;
 #define SYSTEM_CLOCK_APB1_MHZ 20
 #define SYSTEM_CLOCK_APB1_HZ (SYSTEM_CLOCK_APB1_MHZ*1000000)
 
+
+#ifndef SYSTEM_CLOCK_FREQUENCY
+#error SYSTEM_CLOCK_FREQUENCY must be defined
+#endif
+#if !((SYSTEM_CLOCK_FREQUENCY==32) || (SYSTEM_CLOCK_FREQUENCY==80))
+#error Invalid SYSTEM_CLOCK_FREQUENCY: must be defined to 32 or 80
+#endif
+
+
 void BS_GPIO_Init();
 void usrmain();
+
 
 
 

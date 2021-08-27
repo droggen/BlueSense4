@@ -54,6 +54,7 @@
 #include "mode_serial.h"
 #include "mode_modulation.h"
 #include "mode_usr.h"
+#include "mode_ad9834.h"
 
 void mode_dispatch(void)
 {

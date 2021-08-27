@@ -26,7 +26,13 @@ unsigned char CommandParserV21Bench(char *buffer,unsigned char size);
 unsigned char CommandParserV21Bench2(char *buffer,unsigned char size);
 unsigned char CommandParserV21Demod(char *buffer,unsigned char size);
 unsigned char CommandParserV21DemodProd(char *buffer,unsigned char size);
+unsigned char CommandParserModulationCICTest(char *buffer,unsigned char size);
+unsigned char CommandParserModulationCICHard(char *buffer,unsigned char size);
+unsigned char CommandParserModulationDemodTest(char *buffer,unsigned char size);
+unsigned char CommandParserModulationR2IQBench(char *buffer,unsigned char size);
+unsigned char CommandParserModulationUARTDecodeTest(char *buffer,unsigned char size);
+unsigned char CommandParserModulationFSKDemodDecodeTest(char *buffer,unsigned char size);
 
-
+unsigned char CommandParserModulationFSKDemodDecodeLoop(char *buffer,unsigned char size);
 
 #endif /* MODE_MODULATION_H_ */

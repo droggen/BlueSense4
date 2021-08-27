@@ -24,7 +24,7 @@
 
 // Define the number of serial uarts
 extern SERIALPARAM _serial_uart_param[];
-#define SERIALUARTNUMBER	1
+#define SERIALUARTNUMBER	2
 
 extern int __serialuartallocated;
 

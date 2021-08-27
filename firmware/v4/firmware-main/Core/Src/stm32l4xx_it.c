@@ -233,6 +233,8 @@ void DMA1_Channel4_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel4_IRQn 0 */
 
+	//megalol_dsp_hardcic_irq();
+
   /* USER CODE END DMA1_Channel4_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_dfsdm1_flt0);
   /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
@@ -246,6 +248,7 @@ void DMA1_Channel4_IRQHandler(void)
 void DMA1_Channel5_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel5_IRQn 0 */
+	//megalol_dsp_hardcic_irq();
 
   /* USER CODE END DMA1_Channel5_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_dfsdm1_flt1);

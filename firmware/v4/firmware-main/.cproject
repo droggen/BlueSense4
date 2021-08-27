@@ -71,6 +71,7 @@
 									<listOptionValue builtIn="false" value="BUILD_RTC=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_EXTERNAL=0"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_INTERNAL=1"/>
+									<listOptionValue builtIn="false" value="SYSTEM_CLOCK_FREQUENCY=80"/>
 								</option>
 								<option id="fr.ac6.managedbuild.gnu.c.compiler.option.misc.other.61212481" superClass="fr.ac6.managedbuild.gnu.c.compiler.option.misc.other" useByScannerDiscovery="false" value="-fmessage-length=0" valueType="string"/>
 								<inputType id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c.1526430686" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c"/>
@@ -215,6 +216,7 @@
 									<listOptionValue builtIn="false" value="BUILD_RTC=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_EXTERNAL=1"/>
 									<listOptionValue builtIn="false" value="ENABLE_RTC_INTERNAL=0"/>
+									<listOptionValue builtIn="false" value="SYSTEM_CLOCK_FREQUENCY=80"/>
 								</option>
 								<option id="fr.ac6.managedbuild.gnu.c.compiler.option.misc.other.61212481" superClass="fr.ac6.managedbuild.gnu.c.compiler.option.misc.other" useByScannerDiscovery="false" value="-fmessage-length=0" valueType="string"/>
 								<option id="gnu.c.compiler.option.dialect.std.62244091" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
@@ -295,6 +297,7 @@
 								<listOptionValue builtIn="false" value="BUILD_RTC=1"/>
 								<listOptionValue builtIn="false" value="ENABLE_RTC_EXTERNAL=1"/>
 								<listOptionValue builtIn="false" value="ENABLE_RTC_INTERNAL=0"/>
+								<listOptionValue builtIn="false" value="SYSTEM_CLOCK_FREQUENCY=80"/>
 							</option>
 							<inputType id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c.325773209" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.c"/>
 							<inputType id="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.s.1038445182" superClass="fr.ac6.managedbuild.tool.gnu.cross.c.compiler.input.s"/>

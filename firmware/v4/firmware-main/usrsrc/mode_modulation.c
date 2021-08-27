@@ -15,14 +15,22 @@
 #include "mode.h"
 #include "stmdac.h"
 #include "wait.h"
+#include "helper.h"
 #include "stmdfsdm.h"
 #include "kiss_fft.h"
+#include "stmadcfast.h"
+#include "system-extra.h"
+#include "megalol_dsp.h"
+#include "megalol_comm_softuart.h"
+#include "megalol_dsp_fsk.h"
+#include "stmcic.h"
 
 
 const COMMANDPARSER CommandParsersModulation[] =
 {
 	{'H', CommandParserHelp,help_h},
 	{'!', CommandParserQuit,help_quit},
+	{0,0,"---- Correlation-based demodulation (old, audio-based) ----"},
 	{'1', CommandParserV21,"1[,<bps>] V21 modulation with optional bps (default is 15)"},
 	{'2', CommandParserV21Demod,"V21 demodulation with FFT"},
 	{'3', CommandParserV21DemodProd,"V21 demodulation with product"},
@@ -31,6 +39,15 @@ const COMMANDPARSER CommandParsersModulation[] =
 	{'P', CommandParserModulationPhase,"P[,<bps>] PSK modulation with optional bps (default is 15)"},
 	{'K', CommandParserV21Bench,"Benchmark V21 modulation"},
 	{'k', CommandParserV21Bench2,"Another benchmark V21 modulation"},
+	{0,0,"---- I/Q-based demodulation ----"},
+	{'C',CommandParserModulationCICTest,"<id> HardCIC tests. 0=test, 1=benchmark"},
+	{'c',CommandParserModulationR2IQBench,"<id> Real to IQ bench and test"},
+	{'9',CommandParserModulationDemodTest,"<id> FSK frame test. 0=demod bench. 1=test spectrum and print I, Q, CP. 2=synth 1/0 signal, print I, Q, CP. 3=real signal, print I, Q, CP"},
+	{0,0,"---- UART decoding ----"},
+	{'U',CommandParserModulationUARTDecodeTest,"<id> Run UART decode test <id>."},
+	{0,0,"---- FSK I/Q-based demodulation + decoding ----"},
+	{'8',CommandParserModulationFSKDemodDecodeTest,"<id> FSK demod+decode tests <id>"},
+	{'F',CommandParserModulationFSKDemodDecodeLoop,"F,<frq> FSK ADC acquisition, demodulation, decoding"},
 };
 const unsigned char CommandParsersModulationNum=sizeof(CommandParsersModulation)/sizeof(COMMANDPARSER);
 // THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG
@@ -48,6 +65,8 @@ unsigned v21_bit_index;					// Current bit index in 16.16 format
 unsigned v21_bit_current;				// Current bit in the bitstream - this is the effective bit to be transmitted now
 unsigned char v21_payload[V21_PAYLOAD_MAX];			// Data to transmit
 unsigned char _v21_siggen_bit_bit;		// Bit to transmit by the v21_siggen_bit function
+
+
 
 void mode_modulation(void)
 {
@@ -109,7 +128,7 @@ void v21_init(unsigned bps)
 	for(int i=0;i<4;i++)
 			v21_payload[4+i]=0x55;
 	//strcpy(v21_payload+8,"HELLO!");
-	strcpy(v21_payload+8,"THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!");		// 44
+	strcpy((char*)v21_payload+8,"THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!");		// 44
 	v21_payload[51] = 0xff;
 	v21_payload[52] = 0xff;
 	v21_payload[53] = 0xff;
@@ -180,7 +199,7 @@ void vpsk_init(unsigned bps)
 	for(int i=0;i<4;i++)
 			v21_payload[4+i]=0x55;
 	//strcpy(v21_payload+8,"HELLO!");
-	strcpy(v21_payload+8,"THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!");		// 44
+	strcpy((char*)v21_payload+8,"THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG!");		// 44
 	v21_payload[51] = 0xff;
 	v21_payload[52] = 0xff;
 	v21_payload[53] = 0xff;
@@ -326,7 +345,7 @@ unsigned char CommandParserV21Bench2(char *buffer,unsigned char size)
 	(void) buffer; (void) size;
 
 	unsigned refperf = system_perfbench(2);
-	fprintf(file_pri,"Reference performance: %lu\n",refperf);
+	fprintf(file_pri,"Reference performance: %u\n",refperf);
 
 	// Initialise and start the DAC generation
 	v21_init(15);
@@ -339,7 +358,7 @@ unsigned char CommandParserV21Bench2(char *buffer,unsigned char size)
 
 	// Compute overhead
 	unsigned long o = (refperf-perf)*100/refperf;
-	fprintf(file_pri,"Performance with siggen: %lu. Overhead: %lu%%\n",perf,o);
+	fprintf(file_pri,"Performance with siggen: %u. Overhead: %lu%%\n",perf,o);
 
 
 	return 0;
@@ -1288,3 +1307,151 @@ unsigned char CommandParserV21DemodProd(char *buffer,unsigned char size)
 	return 0;
 
 }
+/*
+ 	 Benchmark the CIC
+
+*/
+
+unsigned char CommandParserModulationCICTest(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	int mode;
+	if(ParseCommaGetInt(buffer,1,&mode))
+	{
+		fprintf(file_pri,"Invalid mode: 0=test; 1=bench\n");
+		return 2;
+	}
+	switch(mode)
+	{
+		case 0:
+			hardcic_test_functional();
+			break;
+		case 1:
+			hardcic_bench();
+			break;
+		default:
+			return 1;
+	}
+
+
+
+
+	return 0;
+
+}
+unsigned char CommandParserModulationR2IQBench(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	dsp_r2iq_test();
+
+
+	return 0;
+}
+
+unsigned char CommandParserModulationDemodTest(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+	int mode;
+	if(ParseCommaGetInt(buffer,1,&mode))
+	{
+		fprintf(file_pri,"Invalid mode\n");
+		return 2;
+	}
+
+	switch(mode)
+	{
+	case 0:
+		fsk_demod_test_1();
+		break;
+	case 1:
+		fsk_demod_test_2();
+		break;
+	case 2:
+		fsk_demod_test_3();
+		break;
+	case 3:
+		fsk_demod_test_4();
+		break;
+	default:
+		fprintf(file_pri,"Unrecognized mode\n");
+		return 1;
+	}
+
+
+	return 0;
+}
+unsigned char CommandParserModulationUARTDecodeTest(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	int mode;
+	if(ParseCommaGetInt(buffer,1,&mode))
+	{
+		fprintf(file_pri,"Invalid mode: 0=decode with read by direct buffer access; 1=decode with read by FILE; 2=bench\n");
+		return 2;
+	}
+	switch(mode)
+	{
+		case 0:
+			comm_softuart_test_decode();
+			break;
+		case 1:
+			comm_softuart_test_decode_file();
+			break;
+		case 2:
+			comm_softuart_bench_decode();
+			break;
+		default:
+			return 1;
+	}
+
+	return 0;
+}
+unsigned char CommandParserModulationFSKDemodDecodeTest(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	int mode;
+	if(ParseCommaGetInt(buffer,1,&mode))
+	{
+		fprintf(file_pri,"Invalid mode: 0=decode with read by direct buffer access; 1=decode with read by FILE; 2=bench\n");
+		return 2;
+	}
+
+	// Test demodulation + decoding
+
+	switch(mode)
+	{
+		case 0:
+			dsp_fsk_demod_decode_test_1();
+			break;
+		case 1:
+			dsp_fsk_demod_decode_test_2();
+			break;
+	/*	case 2:
+			comm_softuart_bench_decode();
+			break;*/
+		default:
+			return 1;
+	}
+
+	return 0;
+}
+unsigned char CommandParserModulationFSKDemodDecodeLoop(char *buffer,unsigned char size)
+{
+	(void) buffer; (void) size;
+
+	int frq,br,autoplay;
+	if(ParseCommaGetInt(buffer,3,&frq,&br,&autoplay))
+		return 2;
+
+	// Test demodulation + decoding
+
+	dsp_fsk_adc_demod_decode_loop(frq,br,autoplay);
+
+	return 0;
+}
+
+

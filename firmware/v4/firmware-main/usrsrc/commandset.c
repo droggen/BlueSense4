@@ -992,24 +992,26 @@ unsigned char CommandParserCPUReg(char *buffer,unsigned char size)
 {
 	(void) buffer; (void) size;
 
-#if 0
-	if(ParseCommaGetNumParam(buffer))
+#if 1
+	/*if(ParseCommaGetNumParam(buffer))
 	{
 		fprintf(file_pri,"Changing voltage scaling\n");
 		HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE3);
-	}
+	}*/
 
 
-	unsigned short pwrcr = PWR->CR;
+	unsigned short pwrcr = PWR->CR1;
 
-	fprintf(file_pri,"PWR CR: %04X\n",pwrcr);
-	fprintf(file_pri,"\tVOS: %d\n",(pwrcr>>14)&0b11);
-	fprintf(file_pri,"\tADCDC1: %d\n",(pwrcr>>13)&0b1);
-	fprintf(file_pri,"\tMRLVDS: %d\n",(pwrcr>>11)&0b1);
+	fprintf(file_pri,"PWR CR1: %04X\n",pwrcr);
+	fprintf(file_pri,"\tLPR: %d\n",(pwrcr>>14)&0b1);
+	fprintf(file_pri,"\tVOS: %d\n",(pwrcr>>9)&0b11);
+	fprintf(file_pri,"\tVDBP: %d\n",(pwrcr>>8)&0b1);
+	fprintf(file_pri,"\tLPMS: %d\n",(pwrcr>>0)&0b111);
+	/*fprintf(file_pri,"\tMRLVDS: %d\n",(pwrcr>>11)&0b1);
 	fprintf(file_pri,"\tLPLVDS: %d\n",(pwrcr>>10)&0b1);
 	fprintf(file_pri,"\tFPSD: %d\n",(pwrcr>>9)&0b1);
 	fprintf(file_pri,"\tPLS: %d\n",(pwrcr>>5)&0b111);
-	fprintf(file_pri,"\tPCDE: %d\n",(pwrcr>>4)&0b1);
+	fprintf(file_pri,"\tPCDE: %d\n",(pwrcr>>4)&0b1);*/
 
 	unsigned short flashacr = FLASH->ACR;
 	fprintf(file_pri,"FLASH ACR: %04X\n",flashacr);
@@ -1017,6 +1019,8 @@ unsigned char CommandParserCPUReg(char *buffer,unsigned char size)
 	fprintf(file_pri,"\tICEN: %d\n",(flashacr>>9)&0b1);
 	fprintf(file_pri,"\tPRFTEN: %d\n",(flashacr>>8)&0b1);
 	fprintf(file_pri,"\tLATENCY: %d\n",(flashacr>>0)&0b1111);
+
+	FLASH->ACR |= 1<<8;
 #endif
 	return 0;
 }
