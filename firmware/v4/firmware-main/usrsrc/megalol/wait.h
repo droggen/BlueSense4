@@ -51,6 +51,8 @@ typedef struct
 //#define timer_us_get timer_us_get_asm_fast
 #define timer_us_get timer_us_get_c
 
+extern volatile unsigned long _timer_time_us_monotonic;
+extern volatile unsigned long _timer_time_us;
 /*
 	Interrupt-driven timer functions 
 */
@@ -92,6 +94,7 @@ void _timer_tick_50hz(void);
 //typedef unsigned long int WAITPERIOD;					// This must be matched to the size of the return value of timer_?s_get
 typedef unsigned WAITPERIOD;					// This must be matched to the size of the return value of timer_?s_get
 
+unsigned char _timer_dispatch_1hz_callbacks(unsigned char x);
 char timer_register_callback(unsigned char (*callback)(unsigned char),unsigned short divider);
 char timer_register_slowcallback(unsigned char (*callback)(unsigned char),unsigned short divider);
 char timer_register_50hzcallback(unsigned char (*callback)(unsigned char),unsigned short divider);

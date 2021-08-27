@@ -49,7 +49,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 	* timer_ms_get:						Return the time in millisecond since the epoch; time is composed of the 1Hz high accuracy clock (if available) and the internal 1000Hz or 1024Hz clock.
 	* timer_ms_get_intclk:				Return the time in millisecond since the epoch; time is composed only of the internal 1000Hz or 1024Hz clock.
 	* timer_us_get: 					Return the time in microsecond since the epoch.
-	* timer_register_callback:			Register a callback that will be called at 1024Hz/(divider+1) Hz
+	* timer_register_callback:			Register a callback that will be called at 1000Hz/(divider+1) Hz
 	* timer_register_slowcallback:		Register a callback that will be called at 1Hz/(divider+1) Hz
 	* timer_unregister_callback: 		Unregisters a callback
 	* timer_unregister_slowcallback:	Unregisters a slow callback
@@ -94,6 +94,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdio.h>
 #include "dsystick.h"
 #include "atomicop.h"
+#include "global.h"
 
 
 /******************************************************************************
@@ -117,10 +118,15 @@ volatile unsigned long _timer_1hztimer_in_ms=0;					// Incremented by 1000ms at 
 volatile unsigned long _timer_1hztimer_in_us=0;					// Incremented by 1000000us at each 1Hz timer callback
 volatile unsigned long _timer_time_ms_intclk=0;				// Increments by 1 every millisecond and never reset by 
 
-volatile unsigned long _timer_time_ms=0;					// Current time in milliseconds; initialised by the 1Hz callback to _timer_1hztimer_in_ms and incremented by the internal clock
-volatile unsigned long _timer_time_us=0;					// Current time in microseconds; initialised by the 1Hz callback to _timer_1hztimer_in_us and incremented by the internal clock
+volatile unsigned long _timer_time_ms=0;					// Current time in milliseconds; initialised by the 1Hz callback to _timer_1hztimer_in_ms and incremented by the 1000HZ or 1024Hz internal clock
+															// Can jump forward/backward in time, as effected by the 1Hz correction
+volatile unsigned long _timer_time_us=0;					// Current time in microseconds; initialised by the 1Hz callback to _timer_1hztimer_in_us and incremented by the 1000HZ or 1024Hz internal clock
+															// This is incremented by 1000 or 976.5 by the 1000Hz or 1024Hz timer.
+															// Can jump forward/backward in time, as effected by the 1Hz correction
 volatile unsigned long _timer_time_ms_monotonic=0;			// Current time in milliseconds; initialised by the 1Hz callback to _timer_1hztimer_in_ms and incremented by the internal clock, guaranteed to be monotonic
 volatile unsigned long _timer_time_us_monotonic=0;			// Current time in microseconds; initialised by the 1Hz callback to _timer_1hztimer_in_us and incremented by the internal clock, guaranteed to be monotonic
+															// This is incremented by 1000 or 976.5 by the 1000Hz or 1024Hz timer.
+															// Can jump forward in time, as effected by the 1Hz correction, but cannot jump backward.
 volatile unsigned long _timer_time_us_lastreturned=0;		// Last returned microseconds; combination of _timer_time_us_monotonic and timer counter; used to ensure monotonic time in the call to timer_us_get
 
 // State
@@ -134,6 +140,28 @@ unsigned char timer_numslowcallbacks=0;
 TIMER_CALLBACK timer_slowcallbacks[TIMER_NUMCALLBACKS];
 unsigned char timer_num50hzcallbacks=0;
 TIMER_CALLBACK timer_50hzcallbacks[TIMER_NUMCALLBACKS];
+
+
+// Two defines are used to control the system behaviour.
+#define TIMER_ENABLE_RTC_CORRECTION 0						// Set to 1 to enable the correction based on the RTC 1Hz interrupt.
+#define TIMER_ENABLE_1HZTIMER_FROM_INTERNAL 1				// Set to 1 if there is no RTC but 1Hz callbacks (slowcallbacks) are desired: they are generated from the KHz interrupt.
+
+
+// Check that both defines are defined.
+#ifndef TIMER_ENABLE_1HZTIMER_FROM_INTERNAL
+#error Must define TIMER_ENABLE_1HZTIMER_FROM_INTERNAL to 0 or 1
+#endif
+#ifndef TIMER_ENABLE_1HZTIMER_FROM_INTERNAL
+#error Must define TIMER_ENABLE_1HZTIMER_FROM_INTERNAL to 0 or 1
+#endif
+
+#if TIMER_ENABLE_RTC_CORRECTION==1
+#if TIMER_ENABLE_1HZTIMER_FROM_INTERNAL==1
+#error TIMER_ENABLE_RTC_CORRECTION and ENABLE_1HZTIMER_FROM_INTERNAL are mutually exclusive
+#endif
+#endif
+
+
 
 
 /******************************************************************************
@@ -197,6 +225,11 @@ void timer_init(unsigned long epoch_s,unsigned long epoch_s_frommidnight,unsigne
 			{
 				timer_callbacks[i].counter=0;
 			}
+#if TIMER_ENABLE_1HZTIMER_FROM_INTERNAL==1
+			// Register a callback at 1Hz
+			timer_register_callback(_timer_dispatch_1hz_callbacks,999);
+#endif
+
 			// TOFIX ARM
 			dsystick_clear();
 			//WAIT_TCNT=0;				// Clear counter, and in case the timer generated an interrupt during this initialisation process clear the interrupt flag manually
@@ -234,6 +267,9 @@ void timer_init_us(unsigned long epoch_us)
 ******************************************************************************/
 void _timer_tick_hz(void)
 {
+	// Disable the routine altogether if TIMER_ENABLE_1HZTIMER_FROM_INTERNAL is set.
+	// This allows minimal code change if _timer_tick_hz is called from a 1Hz RTC, even when we do not want to use it.
+#if TIMER_ENABLE_1HZTIMER_FROM_INTERNAL==0
 	// Increment the time updated on the 1Hz tick
 	_timer_1hztimer_in_s++;
 	_timer_1hztimer_in_s_frommidnight++;
@@ -241,12 +277,10 @@ void _timer_tick_hz(void)
 	// Increment the 1hz update correction counter.
 	_timer_time_1hzupdatectr++;
 
-	//return;	// Debug: never do correction
-#if 1
+#if TIMER_ENABLE_RTC_CORRECTION==1
 	// Updating the internal time every 5s leads to <estimate ppm error>
 	const unsigned updateperiod = 5;
 	if(_timer_time_1hzupdatectr>=updateperiod)
-	//if(_timer_time_1hzupdatectr>=1)
 	{
 		_timer_time_1hzupdatectr=0;
 		
@@ -257,17 +291,24 @@ void _timer_tick_hz(void)
 		_timer_1hztimer_in_ms+=updateperiod*1000;
 		_timer_1hztimer_in_us+=updateperiod*1000000l;
 
+		unsigned dtus = _timer_time_us-_timer_1hztimer_in_us;
+		fprintf(file_pri,"dtus: %u\n",dtus);
+
 		// Update the current time. Note that _timer_time_ms and _timer_time_us can jump back or forward in time if the internal clock is respectively too fast or too slow.
 		_timer_time_ms=_timer_1hztimer_in_ms;	
 		_timer_time_us=_timer_1hztimer_in_us;
 		
+
+
 		// Pre-compute the monotonic time
 		// If the current time is higher than the monotonic, update the monotonic to current time. Otherwise do nothing, and eventually the current time will be higher than the monotonic.
-		if(_timer_time_ms>_timer_time_ms_monotonic)			
+		//if(_timer_time_ms>_timer_time_ms_monotonic)				// Not wraparound-safe
+		if(_timer_time_ms-_timer_time_ms_monotonic<0x80000000)		// Wraparound-safe
 		{
 			_timer_time_ms_monotonic=_timer_time_ms;
 		}
-		if(_timer_time_us>_timer_time_us_monotonic)
+		//if(_timer_time_us>_timer_time_us_monotonic)				// Not wraparound-safe
+		if(_timer_time_us-_timer_time_us_monotonic<0x80000000)		// Wraparound-safe
 		{
 			_timer_time_us_monotonic=_timer_time_us;
 		}
@@ -277,6 +318,27 @@ void _timer_tick_hz(void)
 		// Reset the dividers
 		_timer_time_1024to1000_divider=0;
 	}
+#endif
+
+	_timer_dispatch_1hz_callbacks(0);
+
+#endif
+}
+/******************************************************************************
+	function: _timer_dispatch_1hz_callbacks
+*******************************************************************************
+	This function is called by the 1Hz interrupt to dispatch the 1Hz callbacks.
+
+	It may also be called directly from the 1000Hz or 1024Hz interrupts when
+	the 1Hz RTC is not activated.
+******************************************************************************/
+unsigned char _timer_dispatch_1hz_callbacks(unsigned char x)
+{
+	(void)x;
+#if TIMER_ENABLE_1HZTIMER_FROM_INTERNAL==1
+	// Increment the time updated on the 1Hz tick
+	_timer_1hztimer_in_s++;
+	_timer_1hztimer_in_s_frommidnight++;
 #endif
 
 	// Process the callbacks
@@ -289,9 +351,8 @@ void _timer_tick_hz(void)
 			timer_slowcallbacks[i].callback(_timer_1hztimer_in_s);
 		}		
 	}
+	return 0;
 }
-
-
 
 /******************************************************************************
 	function: _timer_tick_1024hz
@@ -321,7 +382,8 @@ void _timer_tick_1024hz(void)
 		
 	// Pre-compute the monotonic time for uS
 	// If the current time is higher than the monotonic, update the monotonic to current time. Otherwise do nothing, and eventually the current time will be higher than the monotonic.
-	if(_timer_time_us>_timer_time_us_monotonic)
+	//if(_timer_time_us>_timer_time_us_monotonic)				// Not wraparound-safe
+	if(_timer_time_us-_timer_time_us_monotonic<0x80000000)		// Wraparound-safe
 	{
 		_timer_time_us_monotonic=_timer_time_us;
 	}
@@ -338,7 +400,8 @@ void _timer_tick_1024hz(void)
 	
 	// Pre-compute the monotonic time for mS
 	// If the current time is higher than the monotonic, update the monotonic to current time. Otherwise do nothing, and eventually the current time will be higher than the monotonic.
-	if(_timer_time_ms>_timer_time_ms_monotonic)			
+	//if(_timer_time_ms>_timer_time_ms_monotonic)				// Not wraparound-safe
+	if(_timer_time_ms-_timer_time_ms_monotonic<0x80000000)		// Wraparound-safe
 	{
 		_timer_time_ms_monotonic=_timer_time_ms;
 	}
@@ -370,7 +433,12 @@ void _timer_tick_1000hz(void)
 
 	// Pre-compute the monotonic time for uS
 	// If the current time is higher than the monotonic, update the monotonic to current time. Otherwise do nothing, and eventually the current time will be higher than the monotonic.
-	if(_timer_time_us>_timer_time_us_monotonic)
+	// The current time could be smaller than the monotonic if the 1Hz timer effected a correction
+	// Want to update the monotonic if _timer_time_us is more "recent" than _timer_time_us_monotonic, while being wraparound-aware.
+	// This corresponds updating monotonic when _timer_time_us-_timer_time_us_monotonic being "small", regardless of wraparound, i.e. _timer_time_us-_timer_time_us_monotonic<0x80000000
+	// If _timer_time_us_monotonic is more recent (higher) than _timer_time_us then _timer_time_us-_timer_time_us_monotonic is "large", i.e. larger 0x80000000
+	//if(_timer_time_us>_timer_time_us_monotonic)		// Not wraparound-safe
+	if(_timer_time_us-_timer_time_us_monotonic<0x80000000)	// Wraparound safe
 	{
 		_timer_time_us_monotonic=_timer_time_us;
 	}
@@ -382,7 +450,8 @@ void _timer_tick_1000hz(void)
 
 	// Pre-compute the monotonic time for mS
 	// If the current time is higher than the monotonic, update the monotonic to current time. Otherwise do nothing, and eventually the current time will be higher than the monotonic.
-	if(_timer_time_ms>_timer_time_ms_monotonic)
+	//if(_timer_time_ms>_timer_time_ms_monotonic)				// Not wraparound-safe
+	if(_timer_time_ms-_timer_time_ms_monotonic<0x80000000)		// Wraparound-safe
 	{
 		_timer_time_ms_monotonic=_timer_time_ms;
 	}
@@ -484,7 +553,7 @@ unsigned long timer_ms_get_c(void)
 	
 	This function is guaranteed to be monotonic.
 	
-	Calls to this function were benchmarked at about 14uS per call.
+	Calls to this function were benchmarked at about 14uS per call on AVR.
 	
 	Returns:
 		Time in microseconds since the epoch
@@ -497,19 +566,19 @@ unsigned long int timer_us_get_c(void)
 	
 	ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 	{
-		tcnt = dsystick_getus();
-		t=_timer_time_us_monotonic;		
+		tcnt = dsystick_getus();				// Microseconds since the start of the current millisecond (dsystick is a ms timer)
+		t=_timer_time_us_monotonic;				// Time in microsecond, incremented by 1000us or 976.5us by the internal 1000Hz or 1024Hz clock.
 	}
 	
 	t+=tcnt;
-	
-	
-	if(t>_timer_time_us_lastreturned)
+
+	// Make the returned time monotonic, and wraparound safe
+	//if(t>_timer_time_us_lastreturned)		// Not wraparound-safe
+	if(t-_timer_time_us_lastreturned<0x80000000)	// Wraparound-safe
 	{
 		_timer_time_us_lastreturned=t;
 	}
 	return _timer_time_us_lastreturned;				// Guaranteed monotonic
-	
 }
 
 /******************************************************************************
@@ -585,7 +654,7 @@ unsigned long timer_s_get_frommidnight(void)
 	       
 	Parameters:
 		callback		-	User callback
-		divider			-	How often the callback must be called, i.e. 1024Hz/(divider+1) Hz.
+		divider			-	How often the callback must be called, i.e. 1000Hz/(divider+1) Hz.
 		   
 	Returns:
 		-1				-	Can't register callback
@@ -947,9 +1016,13 @@ unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp)
 {
 	unsigned long t,wp2;
 	
+
+
 	// Current time
 	t = timer_us_get();
 	
+	//fprintf(file_pri,"wp: t: %u wp: %u\n",t,(unsigned)*wp);
+
 	// AVR benchmarks: ~30uS minimum delay at 11MHz.
 	// ARM @ 30MHz: 10uS is OK.
 	if(p<20)
@@ -967,14 +1040,19 @@ unsigned long timer_waitperiod_us(unsigned long p,WAITPERIOD *wp)
 	// If wp2 is earlier than time, then wp2-time is larger some large value maxrange/2=0x80000000
 	// If wp2 is equal to time, consider ok and go to wait.
 	while(wp2-timer_us_get()>=0x80000000)
+	{
 		wp2+=p;
+	}
 	
 	// Wait until time passes the next period
 	// If t is earlier than wp2 then the difference is larger than some large value maxrange/2=0x80000000
 	// if t is equal or later than wp2, then the difference is zero or a small number.
 	while( (t=timer_us_get())-wp2>0x80000000 )
+	{
+		//fprintf(file_pri,"b: %u %u\n",t,wp2);
 		__NOP();
 		//_delay_us(10);
+	}
 
 	
 	// Store the next time into the user-provided pointer
