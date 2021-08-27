@@ -187,7 +187,12 @@ void bs4_init_extended()
 		system_settimefromrtc();
 	}
 	else
+	{
 		fprintf(file_pri,"Fail\n");
+		timer_init(0,0,0);
+		fprintf(file_pri,"Init time to 0\n");
+	}
+
 
 
 
@@ -260,7 +265,7 @@ void bs4_init_extended()
 
 	//_serial_usart_enable_debug_irq(1);
 
-toto1:
+
 
 	fprintf(file_pri,"going to initialise interface\n");
 
@@ -308,7 +313,6 @@ toto1:
 
 
 	// Init 50Hz timer
-	//dsystick_init();		// don't call
 	timer_register_callback(systick_cb_50hz,19);
 
 
@@ -329,7 +333,7 @@ toto1:
 
 #endif
 
-#if 1
+#if 0
 	// Init audio
 	//stm_dfsdm_init(STM_DFSMD_INIT_16K);
 	stm_dfsdm_init(STM_DFSMD_INIT_OFF,STM_DFSDM_STEREO);
