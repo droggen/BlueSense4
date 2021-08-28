@@ -22,7 +22,7 @@
 #include "wait.h"
 
 #ifndef DHRY_ITERS
-#define DHRY_ITERS 300000
+#define DHRY_ITERS 500000
 #endif
 
 /* Global Variables: */
