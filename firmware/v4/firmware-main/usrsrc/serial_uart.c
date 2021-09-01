@@ -152,7 +152,7 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 	// Get the serial param structure
 	SERIALPARAM *sp = serial_uart_getserialparam(p);
 
-	//
+	fprintf(file_pri,"Cookie: %p\n",sp);
 
 	// USB
 	cookie_io_functions_t iof;
@@ -171,8 +171,13 @@ FILE *serial_open_uart(USART_TypeDef *periph,int *__p)
 
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
+#if __GNUC__==7
 	f->_cookie = sp;
-
+#endif
+#if __GNUC__>=9
+// Must associate FILE and cooking via extra structure
+	serial_associate(f, sp);
+#endif
 
 
 

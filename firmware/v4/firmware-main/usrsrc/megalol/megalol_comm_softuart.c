@@ -192,7 +192,13 @@ FILE *comm_softuart_open(int sr,int br)
 
 
 		// Or: big hack - _cookie seems unused in this libc - this is not portable.
+#if __GNUC__==7
 		_comm_softuart_file->_cookie = &_comm_softuart_serialparam;
+#endif
+#if __GNUC__>=9
+		// Must associate FILE and cooking via extra structure
+		serial_associate(_comm_softuart_file, &_comm_softuart_serialparam);
+#endif
 	}
 	else
 	{

@@ -160,7 +160,13 @@ FILE *serial_open_usb()
 
 
 	// Or: big hack - _cookie seems unused in this libc - this is not portable.
+#if __GNUC__==7
 	f->_cookie = &SERIALPARAM_USB;
+#endif
+#if __GNUC__>=9
+// Must associate FILE and cooking via extra structure
+	serial_associate(f, &SERIALPARAM_USB);
+#endif
 
 
 	// Register USB write callback at low rate to initiate transfer if buffer not empty

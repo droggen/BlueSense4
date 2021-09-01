@@ -24,17 +24,14 @@
 #include "system.h"
 #include "system-extra.h"
 #include "uiconfig.h"
-/*#include "init.h"
-#include "dbg.h"*/
 #include "interface.h"
 #include "mode_global.h"
 #include "ltc2942.h"
 #include "eeprom-m24.h"
 #include "power.h"
 #include "serial_itm.h"
-#include "max31343.h"
+#include "rtcwrapper.h"
 
-//#include "ufat.h"
 
 #include "i2c/i2c_transaction.h"
 #include "i2c/stmi2c.h"
@@ -1000,18 +997,33 @@ unsigned char CommandParserCPUReg(char *buffer,unsigned char size)
 	}*/
 
 
-	unsigned short pwrcr = PWR->CR1;
+	unsigned short pwrcr;
+	pwrcr = PWR->CR1;
 
 	fprintf(file_pri,"PWR CR1: %04X\n",pwrcr);
-	fprintf(file_pri,"\tLPR: %d\n",(pwrcr>>14)&0b1);
-	fprintf(file_pri,"\tVOS: %d\n",(pwrcr>>9)&0b11);
-	fprintf(file_pri,"\tVDBP: %d\n",(pwrcr>>8)&0b1);
-	fprintf(file_pri,"\tLPMS: %d\n",(pwrcr>>0)&0b111);
-	/*fprintf(file_pri,"\tMRLVDS: %d\n",(pwrcr>>11)&0b1);
-	fprintf(file_pri,"\tLPLVDS: %d\n",(pwrcr>>10)&0b1);
-	fprintf(file_pri,"\tFPSD: %d\n",(pwrcr>>9)&0b1);
-	fprintf(file_pri,"\tPLS: %d\n",(pwrcr>>5)&0b111);
-	fprintf(file_pri,"\tPCDE: %d\n",(pwrcr>>4)&0b1);*/
+	fprintf(file_pri,"\tLPR Low-power run: %d\n",(pwrcr>>14)&0b1);
+	fprintf(file_pri,"\tVOS Voltage scaling range: %d\n",(pwrcr>>9)&0b11);
+	fprintf(file_pri,"\tDBP Disable backup domain write protection: %d\n",(pwrcr>>8)&0b1);
+	fprintf(file_pri,"\tLPMS Low-power mode selection: %d\n",(pwrcr>>0)&0b111);
+
+
+	pwrcr = PWR->CR2;
+	fprintf(file_pri,"PWR CR2: %04X\n",pwrcr);
+	fprintf(file_pri,"\tUSV VDDUSB valid: %d\n",(pwrcr>>10)&0b1);
+	fprintf(file_pri,"\tIOSV VDDIO2 valid: %d\n",(pwrcr>>9)&0b1);
+	fprintf(file_pri,"\tPVME1 Periph voltage monitoring 4 enable (VDDA~1.8V): %d\n",(pwrcr>>7)&0b1);
+	fprintf(file_pri,"\tPVME1 Periph voltage monitoring 3 enable (VDDA~1.62V): %d\n",(pwrcr>>6)&0b1);
+	fprintf(file_pri,"\tPVME1 Periph voltage monitoring 2 enable (VDDIO2~0.9V): %d\n",(pwrcr>>5)&0b1);
+	fprintf(file_pri,"\tPVME1 Periph voltage monitoring 1 enable (VDDUSB~1.2V): %d\n",(pwrcr>>4)&0b1);
+	fprintf(file_pri,"\tPLS Power voltage detector level: %d\n",(pwrcr>>1)&0b111);
+	fprintf(file_pri,"\tPVDE Power voltage detector enable: %d\n",(pwrcr>>0)&0b1);
+
+	pwrcr = PWR->CR3;
+	fprintf(file_pri,"PWR CR3: %04X\n",pwrcr);
+	pwrcr = PWR->CR4;
+	fprintf(file_pri,"PWR CR4: %04X\n",pwrcr);
+	fprintf(file_pri,"\tVBRS: %d\n",(pwrcr>>9)&0b1);
+	fprintf(file_pri,"\tVBE VBat charging enable: %d\n",(pwrcr>>8)&0b1);
 
 	unsigned short flashacr = FLASH->ACR;
 	fprintf(file_pri,"FLASH ACR: %04X\n",flashacr);

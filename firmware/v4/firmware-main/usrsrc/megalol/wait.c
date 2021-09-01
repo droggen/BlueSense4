@@ -143,8 +143,8 @@ TIMER_CALLBACK timer_50hzcallbacks[TIMER_NUMCALLBACKS];
 
 
 // Two defines are used to control the system behaviour.
-#define TIMER_ENABLE_RTC_CORRECTION 0						// Set to 1 to enable the correction based on the RTC 1Hz interrupt.
-#define TIMER_ENABLE_1HZTIMER_FROM_INTERNAL 1				// Set to 1 if there is no RTC but 1Hz callbacks (slowcallbacks) are desired: they are generated from the KHz interrupt.
+#define TIMER_ENABLE_RTC_CORRECTION 1						// Set to 1 to enable the correction based on the RTC 1Hz interrupt.
+#define TIMER_ENABLE_1HZTIMER_FROM_INTERNAL 0				// Set to 1 if there is no RTC but 1Hz callbacks (slowcallbacks) are desired: they are generated from the KHz interrupt.
 
 
 // Check that both defines are defined.
@@ -291,8 +291,10 @@ void _timer_tick_hz(void)
 		_timer_1hztimer_in_ms+=updateperiod*1000;
 		_timer_1hztimer_in_us+=updateperiod*1000000l;
 
+#if 0
 		unsigned dtus = _timer_time_us-_timer_1hztimer_in_us;
 		fprintf(file_pri,"dtus: %u\n",dtus);
+#endif
 
 		// Update the current time. Note that _timer_time_ms and _timer_time_us can jump back or forward in time if the internal clock is respectively too fast or too slow.
 		_timer_time_ms=_timer_1hztimer_in_ms;	

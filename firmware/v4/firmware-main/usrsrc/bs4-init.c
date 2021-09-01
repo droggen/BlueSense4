@@ -92,11 +92,11 @@ void bs4_init()
 
 void bs4_init_basic()
 {
+	itmprintf("Basic initialisation\n");
 	// LED Test
 	system_led_test();
 
 	system_led_set(0b000);
-
 
 
 
@@ -106,27 +106,38 @@ void bs4_init_basic()
 	// Open the USB file
 #if 1
 	file_pri = file_usb =  serial_open_usb();
-	/*itmprintf("after serial_open_usb: %p\n",file_usb);
-	for(int i=0;i<5;i++)
-	{
-		fprintf(file_usb,"Writing to file_usb: %d\n",i);
-		HAL_Delay(1000);
-	}*/
+	itmprintf("serial_open_usb: %p\n",file_usb);
 #else
 	file_pri = file_usb = 0;
 #endif
 
-	fprintf(file_usb,"BlueSense4\n");
-	fprintf(file_itm,"BlueSense4\n");
+
+#if 0
+	unsigned ctr=0;
+	while(1) {
+		fprintf(file_itm,"BlueSense4 x %d\n",ctr++);
+
+		HAL_Delay(100);
+		fprintf(file_usb,"BlueSense4 y %d\n",ctr++);
+		HAL_Delay(100);
+	}
+#endif
+
+
+
 
 #if 1
 	i2c_init();
 #endif
+
+	fprintf(file_usb,"Compiled with GCC %d.%d.%d\n",__GNUC__,__GNUC_MINOR__,__GNUC_PATCHLEVEL__);
+
 }
 
 
 void bs4_init_extended()
 {
+	itmprintf("Extended initialisation\n");
 #if 1
 	fprintf(file_pri,"Checking EEPROM... ");
 	if(m24xx_isok())
@@ -237,7 +248,7 @@ void bs4_init_extended()
 
 	int p;
 	file_bt = serial_open_uart(USART2,&p);
-	fprintf(file_pri,"after serial_open_uart: file %p\n",file_bt);
+	fprintf(file_pri,"serial_open_uart: file %p\n",file_bt);
 	if(file_bt==(FILE*)-1)
 	{
 		while(1)

@@ -473,7 +473,12 @@ FILE *ufat_log_open(unsigned char n)
 	// Initialise our parameter structure with the buffer write function and store it in the FILE structure
 	_log_file_param.putbuf = _ufat_log_fputbuf;
 	_log_file_param.device = (void*) file;			// Hack to pass our FILE to fputbuf
+#if __GNUC__==7
 	file->_cookie = &_log_file_param;
+#endif
+#if __GNUC__>=9
+	serial_associate(file,&_log_file_param);
+#endif
 
 
 	if(file==0)
@@ -605,6 +610,11 @@ unsigned char ufat_log_close(void)
 	// Close the stdio file first
 	fclose(_fsinfo.file_current_log_file);
 	_fsinfo.file_current_log_file = 0;
+
+	// Deassociate
+#if __GNUC__>=9
+	serial_deassociate(&_log_file_param);
+#endif
 
 	// Close the low-level file
 	FRESULT res = f_close(&_fsinfo.file_current_log);
