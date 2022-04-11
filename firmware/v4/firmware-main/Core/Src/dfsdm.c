@@ -22,6 +22,8 @@
 
 /* USER CODE BEGIN 0 */
 
+#define MODE_AUDIO 1
+
 /* USER CODE END 0 */
 
 DFSDM_Filter_HandleTypeDef hdfsdm1_filter0;
@@ -39,8 +41,9 @@ DMA_HandleTypeDef hdma_dfsdm1_flt1;
 /* DFSDM1 init function */
 void MX_DFSDM1_Init(void)
 {
-
-  /*hdfsdm1_filter0.Instance = DFSDM1_Filter0;
+#if MODE_AUDIO==1
+	// Audio mode
+  hdfsdm1_filter0.Instance = DFSDM1_Filter0;
   hdfsdm1_filter0.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
   hdfsdm1_filter0.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter0.Init.RegularParam.DmaMode = ENABLE;
@@ -50,8 +53,9 @@ void MX_DFSDM1_Init(void)
   if (HAL_DFSDM_FilterInit(&hdfsdm1_filter0) != HAL_OK)
   {
     Error_Handler();
-  }*/
-	// DAN
+  }
+#else
+	// DAN - Hardware CIC for compute
 	hdfsdm1_filter0.Instance = DFSDM1_Filter0;
 	hdfsdm1_filter0.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
 	hdfsdm1_filter0.Init.RegularParam.FastMode = ENABLE;
@@ -63,6 +67,7 @@ void MX_DFSDM1_Init(void)
 	{
 		Error_Handler();
 	}
+#endif
   hdfsdm1_filter1.Instance = DFSDM1_Filter1;
   hdfsdm1_filter1.Init.RegularParam.Trigger = DFSDM_FILTER_SW_TRIGGER;
   hdfsdm1_filter1.Init.RegularParam.FastMode = DISABLE;
@@ -186,15 +191,20 @@ void MX_DFSDM1_Init(void)
     Error_Handler();
   }
 
+#if MODE_AUDIO==1
+  // Audio
+  if (HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_5, DFSDM_CONTINUOUS_CONV_ON) != HAL_OK)
+    {
+      Error_Handler();
+    }
+#else
+  // CIC for compute
   if (HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_0, DFSDM_CONTINUOUS_CONV_ON) != HAL_OK)
 	{
 	  Error_Handler();
 	}
+#endif
 
-  /*if (HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter0, DFSDM_CHANNEL_5, DFSDM_CONTINUOUS_CONV_ON) != HAL_OK)
-  {
-    Error_Handler();
-  }*/
   if (HAL_DFSDM_FilterConfigRegChannel(&hdfsdm1_filter1, DFSDM_CHANNEL_6, DFSDM_CONTINUOUS_CONV_ON) != HAL_OK)
   {
     Error_Handler();
@@ -258,7 +268,8 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
 
     /* DFSDM1 DMA Init */
     /* DFSDM1_FLT0 Init */
-#if 0
+#if MODE_AUDIO==1
+  // For audio
   if(dfsdm_filterHandle->Instance == DFSDM1_Filter0){
     hdma_dfsdm1_flt0.Instance = DMA1_Channel4;
     hdma_dfsdm1_flt0.Init.Request = DMA_REQUEST_0;
@@ -279,8 +290,8 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
     __HAL_LINKDMA(dfsdm_filterHandle,hdmaInj,hdma_dfsdm1_flt0);
     __HAL_LINKDMA(dfsdm_filterHandle,hdmaReg,hdma_dfsdm1_flt0);
   }
-#endif
-  // DAN
+#else
+  // CIC for compute
   if(dfsdm_filterHandle->Instance == DFSDM1_Filter0){
      hdma_dfsdm1_flt0.Instance = DMA1_Channel4;
      hdma_dfsdm1_flt0.Init.Request = DMA_REQUEST_0;
@@ -295,12 +306,12 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
      {
        Error_Handler();
      }
-
      /* Several peripheral DMA handle pointers point to the same DMA handle.
       Be aware that there is only one channel to perform all the requested DMAs. */
      __HAL_LINKDMA(dfsdm_filterHandle,hdmaInj,hdma_dfsdm1_flt0);
      __HAL_LINKDMA(dfsdm_filterHandle,hdmaReg,hdma_dfsdm1_flt0);
    }
+#endif
 
     /* DFSDM1_FLT1 Init */
   if(dfsdm_filterHandle->Instance == DFSDM1_Filter1){

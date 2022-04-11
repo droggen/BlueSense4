@@ -59,7 +59,7 @@
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 #if SYSTEM_CLOCK_FREQUENCY==32
-
+void SystemClock_Config_32MHz(void);
 #endif
 #if 0
 void SystemClock_Config_80MHz(void);

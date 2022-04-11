@@ -92,7 +92,7 @@ const COMMANDPARSER CommandParsersAudio[] =
 	{'!', CommandParserQuit,help_quit},
 
 	{0,0,"---- Audio settings ----"},
-	{'V',CommandParserVolume,"V[,<vol>] Get the current amplification volume or set it.\n\t\t<vol> ranges from -2 to +2: 0 is default volume; positive/negative values increase/decrease the volume.\n\t\tThis is only valid with "},
+	{'V',CommandParserVolume,"V[,<vol>] Get the current amplification volume or set it.\n\t\t<vol> ranges from -2 to +2: 0 is default volume; positive/negative values increase/decrease the volume.\n\t\t"},
 	{0,0,""},
 	{0,0,"---- Developer functions ----"},
 	{0,0,"Use S to initialise and start sampling via DMA. Stream data with d or x; log data with L."},

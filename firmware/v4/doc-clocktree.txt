@@ -1,0 +1,72 @@
+=== STM32L496 at 20MHz (v3) ===
+Power: 					20MHz
+HCLK: 					20MHz
+Cortex System Timer: 	20MHz
+FCLK Cortex Clock:		20MHz
+APB1 peripheral:		20MHz
+APB1 timer:				20MHz
+APB2 peripheral:		20MHz
+APB2 timer:				20MHz
+
+USART2:					20MHz (from PCLK1)
+
+SDMMC1:					48MHz (from PLLSAI1Q)
+USB:					48MHz (from PLLSAI1Q)
+I2C1:					20MHz (from PCLK1)
+
+DFSDM1:					20MHz (from SYSCLK)
+
+System Clock Mux:		from PLLCLK
+
+--- DFSDM1 configuration ---
+Output Clock	Selection:	Source is system clock
+				Divider:	13		(divider is overriden in stmdfsdm.c)
+
+=== STM32L496 at 32MHz (v4) ===
+Power: 					32MHz
+HCLK: 					32MHz
+Cortex System Timer: 	4MHz
+FCLK Cortex Clock:		32MHz
+APB1 peripheral:		16MHz
+APB1 timer:				32MHz
+APB2 peripheral:		16MHz
+APB2 timer:				32MHz
+
+USART2:					16MHz (from PCLK1)
+
+SDMMC1:					48MHz (from PLLSAI1Q)
+USB:					48MHz (from PLLSAI1Q)
+I2C1:					16MHz (from PCLK1)
+
+DFSDM1:					16MHz (from PCLK1)
+
+System Clock Mux:		from PLLCLK
+
+--- DFSDM1 configuration ---
+Output Clock	Selection:	Source is system clock
+				Divider:	13		(divider is overriden in stmdfsdm.c)
+				
+=== STM32L496 at 80MHz (v4) ===
+Power: 					80MHz
+HCLK: 					80MHz
+Cortex System Timer: 	10MHz
+FCLK Cortex Clock:		80MHz
+APB1 peripheral:		20MHz
+APB1 timer:				40MHz
+APB2 peripheral:		80MHz
+APB2 timer:				80MHz
+
+USART2:					20MHz (from PCLK1)
+
+SDMMC1:					48MHz (from PLLSAI1Q)
+USB:					48MHz (from PLLSAI1Q)
+I2C1:					20MHz (from PCLK1)
+
+DFSDM1:					20MHz (from PCLK1)
+
+System Clock Mux:		from PLLCLK
+
+
+--- DFSDM1 configuration ---
+Output Clock	Selection:	Source is system clock
+				Divider:	13		(divider is overriden in stmdfsdm.c)

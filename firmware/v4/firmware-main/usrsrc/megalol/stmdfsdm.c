@@ -94,6 +94,17 @@ unsigned int _stm_dfsdm_rightshift;												// Number of bits to right shift 
 DFSDM_Filter_HandleTypeDef *_stm_dfsdm_filters[2] = {&hdfsdm1_filter0,&hdfsdm1_filter1};
 DFSDM_Channel_HandleTypeDef *_stm_dfsdm_channels[2] = {&hdfsdm1_channel5,&hdfsdm1_channel6};
 
+#if SYSTEM_CLOCK_FREQUENCY==80
+const char *_stm_dfsdm_modes_80MHz[STM_DFSMD_INIT_MAXMODES+1]   =
+{
+	// Off
+    "Sound off",
+	"8 KHz (8003Hz)",
+	"16 KHz (16181Hz)",
+	"20 KHz (20080Hz)",
+};
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==20
 const char *_stm_dfsdm_modes_20MHz[STM_DFSMD_INIT_MAXMODES+1]   =
 {
 	// Off
@@ -102,6 +113,8 @@ const char *_stm_dfsdm_modes_20MHz[STM_DFSMD_INIT_MAXMODES+1]   =
 	"16 KHz (16181Hz)",
 	"20 KHz (20080Hz)",
 };
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==32
 const char *_stm_dfsdm_modes_16MHz[STM_DFSMD_INIT_MAXMODES+1]   =
 {
 	// Off
@@ -110,14 +123,51 @@ const char *_stm_dfsdm_modes_16MHz[STM_DFSMD_INIT_MAXMODES+1]   =
 	"16 KHz (15920Hz)",
 	"20 KHz (19875Hz)",
 };
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==80
+#define _stm_dfsdm_modes _stm_dfsdm_modes_80MHz
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==20
+#define _stm_dfsdm_modes _stm_dfsdm_modes_20MHz
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==32
 #define _stm_dfsdm_modes _stm_dfsdm_modes_16MHz
+#endif
+
 
 /******************************************************************************
 	_stm_dfsdm_modes_param
 *******************************************************************************
 	Parameters to set-up the audio acquisition at pre-defined frequencies.
 	Each entry comprises the following parameters in this order: order fosr iosr div shift
+
+	Output data rate with fast=0:
+		s/s = fck / [ fosr*(iosr-1+ford) + (ford+1) ]
+	when iosr=1 simplifies to:
+		s/s = fck / [ fosr*ford + ford+1 ]
+
+
 ******************************************************************************/
+#if SYSTEM_CLOCK_FREQUENCY==80
+const unsigned char _stm_dfsdm_modes_param_80MHz[STM_DFSMD_INIT_MAXMODES+1][5] = {
+		// These parameters assume that the clock driving the ckout is 80MHz (e.g. SysClk=80).
+
+		// OFF - the parameters are irrelevant for this mode
+		{0,     0,     0,     0,     0},
+
+		// 8KHz
+		{4,     88,    1,     7*4,     11},			// 8003Hz. Clipping rightshift: 10. Ok rightshift 11
+		//{3,82,1,10,3},							// Alternative settings with non-overclocked microphone, poorer quality
+
+		// 16KHz
+		{5,     40,    1,     6*4,     10},			// 16181 Hz. Clipping with rightshift: 7, 8, 9. Ok with rightshift: 10
+
+		// 20KHz
+		{5,     32,    1,     6*4,     8},			// 20080 Hz with clock at 3.33MHz. Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
+
+};
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==20
 const unsigned char _stm_dfsdm_modes_param_20MHz[STM_DFSMD_INIT_MAXMODES+1][5] = {
 		// These parameters assume an audio clock of 20MHz.
 
@@ -135,6 +185,9 @@ const unsigned char _stm_dfsdm_modes_param_20MHz[STM_DFSMD_INIT_MAXMODES+1][5] =
 		{5,     32,    1,     6,     8},			// 20080 Hz with clock at 3.33MHz. Rightshift=6 leads to clipping; rightshift=7 also clipping; minimum experimental is 8
 
 };
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==32
+// 32 MHz
 const unsigned char _stm_dfsdm_modes_param_16MHz[STM_DFSMD_INIT_MAXMODES+1][5] = {
 		// These parameters assume an audio clock of 16MHz.
 
@@ -151,9 +204,20 @@ const unsigned char _stm_dfsdm_modes_param_16MHz[STM_DFSMD_INIT_MAXMODES+1][5] =
 		{5,     31,    1,     5,     8},			// 19875 Hz. Clipping rightshift: 8 (with 8: -9000-+13000)
 
 };
+#endif
 // Select the parameters
-//#define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_20MHz
+#if SYSTEM_CLOCK_FREQUENCY==80
+#define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_80MHz
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==32
+#warning Check if clock is really 16
 #define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_16MHz
+#endif
+#if SYSTEM_CLOCK_FREQUENCY==20
+#define _stm_dfsdm_modes_param _stm_dfsdm_modes_param_20MHz
+#endif
+
+
 
 
 /******************************************************************************
@@ -183,6 +247,10 @@ void stm_dfsdm_init(unsigned mode,unsigned char left_right)
 	HAL_StatusTypeDef s;
 
 	fprintf(file_pri,"Audio initialisation. Memory used: %u bytes\n",stm_dfsdm_memoryused());
+
+	// Print info about which clock is used to drive DFSDM1
+	fprintf(file_pri,"DFSDM CKOUTSRC: %d, %s clock\n",(int)((DFSDM1_Channel0->CHCFGR1)>>30)&1,(((DFSDM1_Channel0->CHCFGR1)>>30)&1) ? "audio":"system");
+	fprintf(file_pri,"SAI1SEL: %d\n",((RCC->CCIPR)>>22)&0b11);
 
 
 
