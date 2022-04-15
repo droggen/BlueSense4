@@ -62,7 +62,7 @@ SDMMC1:					48MHz (from PLLSAI1Q)
 USB:					48MHz (from PLLSAI1Q)
 I2C1:					20MHz (from PCLK1)
 
-DFSDM1:					20MHz (from PCLK1)
+DFSDM1:					80MHz (from PCLK2 Note: bug in CubeMX: shows clock to be PCLK1 but it is actually PCLK2)
 
 System Clock Mux:		from PLLCLK
 
